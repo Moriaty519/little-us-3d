@@ -1,0 +1,12 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>地名避让 · 密集城市测试</title><link rel="stylesheet" href="../src/style.css"><script type="importmap">{"imports":{"three":"/dist/assets/three.module.js","/src/assets/OrbitControls.js":"/dist/assets/OrbitControls.js","/src/assets/RoundedBoxGeometry.js":"/dist/assets/RoundedBoxGeometry.js"}}</script><section id="travel-page"><header class="travel-topbar"><button class="travel-soft-button">← 小屋</button><h1>足迹</h1><div class="travel-top-actions"><button class="travel-primary">＋ 添加足迹</button></div></header><div id="travel-map-stage" class="travel-map-stage"></div><aside class="travel-sidebar"><label class="travel-search"><input id="filter" placeholder="查找已记录城市"></label><div id="city-list"></div><small class="travel-muted">密集城市测试 · 不保存记录</small></aside><footer class="travel-footer"><div class="travel-controls"><button id="zoom-out" aria-label="缩小地图">−</button><button id="reset" aria-label="重置地图缩放">↺</button><button id="zoom-in" aria-label="放大地图">＋</button></div></footer></section><script type="module">
+import {createTravelScene} from '../src/travel-scene.js';
+import {CHINA_CITIES} from '../src/cities.js';
+import {cityName} from '../src/travel-storage.js';
+const dense=['北京','天津','济南','青岛','南京','镇江','扬州','泰州','常州','无锡','苏州','上海','南通','嘉兴','湖州','杭州','绍兴','宁波','舟山','金华','台州','温州','合肥','芜湖','福州','厦门','泉州','广州','深圳','东莞','佛山','珠海','中山','惠州','香港','澳门','成都','重庆','西安','咸阳','长沙','武汉','昆明'];
+const all=new URLSearchParams(location.search).has('all');
+const cities=CHINA_CITIES.filter(c=>all||dense.includes(cityName(c)));
+const view=createTravelScene(document.getElementById('travel-map-stage'),id=>view.select(id));view.setRecords(cities.map(c=>({cityId:c.id})));
+for(const c of cities){const b=document.createElement('button');b.className='travel-city-card';b.textContent=cityName(c)+' · 1 段回忆';b.onclick=()=>view.select(c.id);document.getElementById('city-list').append(b);}
+document.getElementById('zoom-in').onclick=()=>view.zoom(1.15);document.getElementById('zoom-out').onclick=()=>view.zoom(1/1.15);document.getElementById('reset').onclick=()=>view.reset();
+document.getElementById('filter').oninput=e=>{for(const b of document.querySelectorAll('.travel-city-card'))b.hidden=!b.textContent.includes(e.target.value);};
+</script></html>

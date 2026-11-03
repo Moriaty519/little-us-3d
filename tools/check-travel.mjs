@@ -1,0 +1,24 @@
+// Trust-boundary and compatibility checks for local travel backups.
+import fs from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const root=new URL('../src/',import.meta.url);
+const source=async name=>await fs.readFile(new URL(name,root),'utf8');
+const storage=await source('storage.js'),cities=await source('cities.js');
+const travel=(await source('travel-storage.js')).replace(/^import .*;\s*$/gm,'');
+const encode=text=>'data:text/javascript;base64,'+Buffer.from(text).toString('base64');
+const album=(await source('album-storage.js')).replace(/^import .*;\s*$/gm,'');
+const api=await import(encode(storage+'\n'+cities+'\n'+album+'\n'+travel));
+const city=api.findCities('成都')[0];assert.equal(api.cityName(city),'成都');assert.equal(api.CITY_BY_ID.size,378);
+assert.equal(api.cityName(api.findCities('大理')[0]),'大理');assert.equal(api.cityName(api.findCities('香港')[0]),'香港');
+const record={id:'journey-qa',cityId:city.id,title:'同行',date:'2026-10-31',note:'一起走过的地方。',photos:[],createdAt:'2026-10-31T08:00:00.000Z',updatedAt:'2026-10-31T08:00:00.000Z'};
+assert.deepEqual(api.validJourneys([record]),[record]);
+assert.deepEqual(api.validFullBackup({format:'little-us-backup',version:1,memories:[]}),{memories:[],journeys:[],albums:[]});
+const v2={format:'little-us-backup',version:2,memories:[],journeys:[record]};assert.deepEqual(api.validFullBackup(v2).journeys,[record]);
+assert.throws(()=>api.validFullBackup({...v2,version:4}));assert.throws(()=>api.validFullBackup({...v2,journeys:null}));
+for(const patch of [{id:''},{cityId:'missing'},{date:'2026-02-30'},{date:'bad'},{title:'x'.repeat(61)},{note:'x'.repeat(4001)},{photos:['data:image/svg+xml;base64,PHN2Zz4=']},{photos:['https://example.com/photo.jpg']},{photos:Array(13).fill('data:image/jpeg;base64,/9j/')},{updatedAt:'bad'}])assert.throws(()=>api.validJourneys([{...record,...patch}]));
+assert.throws(()=>api.validJourneys([record,record]));
+assert.throws(()=>api.validJourneys(Array.from({length:2001},(_,index)=>({...record,id:'limit-'+index}))),/2000/);
+const newer={...record,note:'更新后的回忆',updatedAt:'2026-10-31T09:00:00.000Z'};
+assert.deepEqual(api.mergeRecords([newer],[record]),[newer]);assert.deepEqual(api.mergeRecords([record],[newer,newer]),[newer]);
+assert.deepEqual(api.validFullBackup(JSON.parse(JSON.stringify(v2))),{memories:[],journeys:[record],albums:[]});
+console.log('PASS: city lookup, display names, legacy/v2 compatibility, dates, photo safety/limits, duplicate ids, newer-record merge, roundtrip.');

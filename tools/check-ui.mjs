@@ -1,0 +1,15 @@
+import fs from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const source=await fs.readFile(new URL('../src/ui.js',import.meta.url),'utf8');
+const {createTapTracker}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+const event=(x,y,time=0,id=1,button=0)=>({clientX:x,clientY:y,timeStamp:time,pointerId:id,button});
+const tap=createTapTracker();
+tap.begin(event(0,0));assert.equal(tap.end(event(1,1,100)),true);
+tap.begin(event(0,0));tap.move(event(100,0,50));tap.move(event(0,0,100));assert.equal(tap.end(event(0,0,150)),false,'returning to the start after a drag must not click');
+tap.begin(event(0,0));tap.begin(event(0,0,30,2));assert.equal(tap.end(event(0,0,100,2)),false);assert.equal(tap.end(event(0,0,110)),false,'pinching must not open content or return');
+tap.begin(event(0,0));tap.cancel(event(0,0));assert.equal(tap.end(event(0,0,100)),false);
+tap.begin(event(0,0,0,1,2));assert.equal(tap.end(event(0,0,100,1,2)),false);
+tap.begin(event(0,0));assert.equal(tap.end(event(0,0,700)),false,'long presses must not accidentally click');
+tap.begin(event(0,0));tap.reset();assert.equal(tap.end(event(0,0,100)),false);
+tap.begin(event(0,0));assert.equal(tap.end(event(1,0,100)),true,'interaction must recover after reset');
+console.log('PASS: click, round-trip drag, pinch, cancellation, secondary button, long press and page reset.');

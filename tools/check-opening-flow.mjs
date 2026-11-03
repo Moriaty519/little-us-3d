@@ -1,0 +1,23 @@
+import fs from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const {createOpening}=await import('data:text/javascript;base64,'+Buffer.from(await fs.readFile(new URL('../src/opening.js',import.meta.url),'utf8')).toString('base64'));
+const ids=['opening-page','opening-room-slot','opening-flight','opening-sound','opening-seal','opening-letter','opening-room-fallback','opening-replay','app'];
+const elements=Object.fromEntries(ids.map(id=>[id,{id,style:{},hidden:false,classList:{values:new Set(),add(...v){v.forEach(x=>this.values.add(x));},remove(...v){v.forEach(x=>this.values.delete(x));},toggle(v,enabled){enabled?this.add(v):this.remove(v);}},setAttribute(){},focus(){},getBoundingClientRect:()=>({left:0,top:0})}]));
+let reduced=false,frames=[],completed=0,calls=[];
+globalThis.document={getElementById:id=>{assert.ok(elements[id],`unexpected UI dependency: ${id}`);return elements[id];},addEventListener(){}};
+globalThis.window={matchMedia:()=>({get matches(){return reduced;}}),addEventListener(){}};
+globalThis.localStorage={getItem:()=>null};
+globalThis.requestAnimationFrame=callback=>frames.push(callback);
+const room={openingAnchor:()=>({x:0,y:0}),reset(){},present(target){calls.push(['present',target.id]);},beginOpening(){calls.push(['begin']);},setActive(){},unfold(p){calls.push(['unfold',p]);},openingTransition(p){calls.push(['transition',p]);},endOpening(){calls.push(['end']);}};
+const flow=createOpening({room,roomContainer:{id:'scene'},onComplete:()=>completed++});
+async function frame(time){const pending=frames;frames=[];pending.forEach(callback=>callback(time));await Promise.resolve();await Promise.resolve();}
+const first=elements['opening-seal'].onclick();await frame(0);await frame(4600);
+assert.equal(flow.isAnimating(),true);assert.equal(completed,0,'room must finish its transition before interaction');
+assert.ok(calls.some(([type,id])=>type==='present'&&id==='opening-flight'),'unfolding must automatically continue into entry');
+await frame(4600);await frame(5850);await first;
+assert.equal(flow.isActive(),false);assert.equal(completed,1);assert.equal(elements.app.inert,false);assert.equal(elements['opening-page'].hidden,true);
+assert.deepEqual(calls.filter(([type])=>type==='end'),[['end']]);assert.deepEqual(calls.at(-1),['present','scene']);
+flow.start();const cancelled=elements['opening-seal'].onclick();await frame(6000);await frame(7000);flow.skip();flow.start();
+const before=calls.length;await frame(11000);await cancelled;assert.equal(calls.length,before,'cancelled frames must not alter a replay');assert.equal(flow.isAnimating(),false);assert.equal(completed,2);
+reduced=true;await elements['opening-seal'].onclick();assert.equal(completed,3);assert.equal(flow.isActive(),false);
+console.log('PASS: one-click automatic handoff, interaction timing, no extra entry/skip controls, cancellation, replay and reduced motion.');

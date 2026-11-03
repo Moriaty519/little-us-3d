@@ -1,0 +1,109 @@
+[
+  {
+    "file": "000.png",
+    "time": 1793540329400,
+    "phase": "home"
+  },
+  {
+    "file": "001.png",
+    "time": 1793540329764,
+    "phase": "focus",
+    "transform": "none"
+  },
+  {
+    "file": "002.png",
+    "time": 1793540329844,
+    "phase": "focus",
+    "transform": "none"
+  },
+  {
+    "file": "003.png",
+    "time": 1793540329959,
+    "phase": "focus",
+    "transform": "none"
+  },
+  {
+    "file": "004.png",
+    "time": 1793540330080,
+    "phase": "focus",
+    "transform": "none"
+  },
+  {
+    "file": "005.png",
+    "time": 1793540330159,
+    "phase": "focus",
+    "transform": "none"
+  },
+  {
+    "file": "006.png",
+    "time": 1793540330212,
+    "phase": "focus",
+    "transform": "none"
+  },
+  {
+    "file": "007.png",
+    "time": 1793540330234,
+    "phase": "focus",
+    "transform": "none"
+  },
+  {
+    "file": "008.png",
+    "time": 1793540330297,
+    "phase": "focus",
+    "transform": "none"
+  },
+  {
+    "file": "009.png",
+    "time": 1793540330342,
+    "phase": "map-lens",
+    "transform": "none"
+  },
+  {
+    "file": "010.png",
+    "time": 1793540330439,
+    "phase": "map-lens",
+    "transform": "none"
+  },
+  {
+    "file": "011.png",
+    "time": 1793540330558,
+    "phase": "arrive",
+    "transform": "none"
+  },
+  {
+    "file": "012.png",
+    "time": 1793540330596,
+    "phase": "arrive",
+    "transform": "none"
+  },
+  {
+    "file": "013.png",
+    "time": 1793540330661,
+    "phase": "arrive",
+    "transform": "none"
+  },
+  {
+    "file": "014.png",
+    "time": 1793540330768,
+    "phase": "arrive",
+    "transform": "none"
+  },
+  {
+    "file": "015.png",
+    "time": 1793540330874,
+    "phase": "arrive",
+    "transform": "none"
+  },
+  {
+    "file": "016.png",
+    "time": 1793540330932,
+    "phase": "arrive",
+    "transform": "none"
+  },
+  {
+    "file": "017.png",
+    "time": 1793540330979,
+    "phase": "done",
+    "transform": "none"
+  }
+]
