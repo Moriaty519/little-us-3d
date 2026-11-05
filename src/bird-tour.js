@@ -1,5 +1,5 @@
 export const BIRD_TOUR_STOPS=[
-  {id:'bird',name:'小木屋',text:'这是我的小木屋。点击它，可以打开这里的回忆，也可以添一段新的故事。'},
+  {id:'bird',name:'小木屋',text:'这是我的小木屋。我平时就住在这里，从这里出发带你逛一圈。'},
   {id:'photos',name:'照片墙',text:'照片墙里藏着我们的相册。点击进入，可以翻看照片、写故事，收藏每个小日常。'},
   {id:'guitar',name:'吉他',text:'点击这把吉他，就能进入 KTV。可以添加照片、点歌听音乐，还能拨一拨吉他。'},
   {id:'map',name:'地图',text:'点击地图，进入我们的足迹。选一座城市，记录去过的地方和旅途中的照片。'},
@@ -47,10 +47,12 @@ export function createBirdTour({room,home}){
     room?.endBirdTour();room?.birdTourCue(false);
     if(focus&&previousFocus?.isConnected&&!previousFocus.closest('[hidden]'))previousFocus.focus({preventScroll:true});
   }
-  function travel(destination){
-    const current=++token;state='flying';panel.dataset.state=state;panel.hidden=true;highlight(null);next.disabled=true;prev.disabled=true;skip.focus({preventScroll:true});
+  function travel(destination,{skipTour=false}={}){
+    const current=++token;state='flying';panel.dataset.state=state;panel.hidden=true;highlight(null);next.disabled=true;prev.disabled=true;
+    if(skipTour){skip.hidden=true;get('home').focus({preventScroll:true});}else skip.focus({preventScroll:true});
     const started=room.flyBirdTour(destination,()=>{
       if(current!==token)return;
+      if(skipTour){cancel({focus:true});return;}
       panel.hidden=false;next.disabled=false;
       if(destination==='home'){
         state='done';panel.dataset.state=state;title.textContent='小屋交给你啦';copy.textContent='我回到小木屋了。现在可以自由点击家具，探索我们的故事。点完成结束导览，也可以回到上一步。';progress.textContent='导览完成';prev.disabled=false;setNextLabel('完成');
@@ -60,7 +62,7 @@ export function createBirdTour({room,home}){
         prev.disabled=index===0;highlight(stop.id);setNextLabel('下一步');
       }
       (direction<0&&!prev.disabled?prev:next).focus({preventScroll:true});
-    });
+    },skipTour);
     if(!started)cancel();
   }
   function start(){
@@ -71,7 +73,7 @@ export function createBirdTour({room,home}){
   }
   next.onclick=()=>{if(state==='done'){cancel({focus:true});return;}if(state!=='stop')return;direction=1;index++;travel(index===BIRD_TOUR_STOPS.length?'home':BIRD_TOUR_STOPS[index].id);};
   prev.onclick=()=>{if(!['stop','done'].includes(state)||index<=0)return;direction=-1;index--;travel(BIRD_TOUR_STOPS[index].id);};
-  startBtn.onclick=start;exploreBtn.onclick=dismissCue;skip.onclick=()=>cancel({focus:true});
+  startBtn.onclick=start;exploreBtn.onclick=dismissCue;skip.onclick=()=>{if(state==='done'||state==='cue'||state==='hidden'){cancel({focus:true});return;}if(state==='stop'||state==='flying')travel('home',{skipTour:true});};
   document.addEventListener('keydown',event=>{if(state==='hidden'||home.hidden||home.inert||document.querySelector('dialog[open]')||!get('memory-drawer').hidden)return;if(event.key==='Escape'){event.preventDefault();cancel({focus:true});}});
   return {start,showCue,cancel,dismissCue,isActive:()=>['flying','stop','done'].includes(state),getState:()=>({state,index,id:BIRD_TOUR_STOPS[index]?.id})};
 }

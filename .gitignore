@@ -1,7 +1,42 @@
+# macOS / editor junk
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local environments and secrets
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+
+# Logs and temporary files
 *.log
+npm-debug.log*
+*.tmp
+*.bak
+*.swp
+*-tmp.*
+
+# Python
 __pycache__/
 *.pyc
+
+# Node / browser test tools
 node_modules/
 .preview-tools/
 .npm-cache/
+test-results/
+playwright-report/
+.playwright/
+coverage/
+
+# Personal exports from the app
+little-us-全部回忆备份-*.json
+*.backup.json
+
+# Build output is intentionally tracked for direct download:
+#   dist/
+#   little-us.html
+# Keep preview/ tracked as documentation; avoid adding temporary screenshots.

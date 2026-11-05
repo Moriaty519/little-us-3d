@@ -1,35 +1,51 @@
 import { createTravelScene } from './travel-scene.js';
 import { confirmAction,modalOpen } from './ui.js';
 import { CITY_BY_ID, cityName, findCities, journeyLoad, journeySave, journeyRemove, validJourneys } from './travel-storage.js';
+import { QINGDAO_ID } from './qingdao-diorama.js';
 
 export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
-  const el=id=>document.getElementById(id),page=el('travel-page'),sidebar=el('travel-sidebar'),form=el('journey-form');
-  let records=[],loaded=false,view=null,opened=false,cityId=null,recordId=null,editingId=null,chosenCity=null,draftPhotos=[],dirty=false,processing=false,saving=false,generation=0,toastTimer;
+  const el=id=>document.getElementById(id),page=el('travel-page'),sidebar=el('travel-sidebar'),form=el('journey-form'),overlay=el('travel-drawer-overlay'),focusBack=el('travel-focus-back');
+  let records=[],loaded=false,view=null,opened=false,cityId=null,recordId=null,editingId=null,chosenCity=null,draftPhotos=[],dirty=false,processing=false,saving=false,generation=0,toastTimer,focusActive=false;
   const make=(parent,tag,content,className)=>{const node=document.createElement(tag);if(content!==undefined)node.textContent=content;if(className)node.className=className;parent.append(node);return node;};
   function action(parent,label,callback,className){const button=make(parent,'button',label,className);button.type='button';button.onclick=callback;return button;}
   function toast(message){el('travel-toast').textContent=message;el('travel-toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el('travel-toast').classList.remove('show'),4500);}
   async function guard(){return !saving&&(!dirty||await confirmAction('放弃修改？','未保存的内容会丢失。'));}
   const sorted=list=>[...list].sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt));
   function formError(message){el('journey-error').textContent=message;el('journey-error').hidden=false;}
+  function openDrawer(){
+    if(!opened||focusActive)return;
+    page.classList.add('drawer-open');overlay.hidden=false;sidebar.inert=false;sidebar.setAttribute('aria-hidden','false');el('travel-drawer-toggle').setAttribute('aria-expanded','true');
+    requestAnimationFrame(()=>view?.fit());
+  }
+  function closeDrawer(){
+    page.classList.remove('drawer-open');overlay.hidden=true;sidebar.inert=true;sidebar.setAttribute('aria-hidden','true');el('travel-drawer-toggle').setAttribute('aria-expanded','false');
+    requestAnimationFrame(()=>view?.fit());
+  }
   function setPanel(name){
     for(const id of ['travel-city-list-view','travel-detail-view','travel-form-view'])el(id).hidden=id!==name;
     page.classList.toggle('form-open',name==='travel-form-view');page.classList.toggle('detail-open',name==='travel-detail-view');
     sidebar.scrollTop=0;requestAnimationFrame(()=>view?.fit());
   }
+  function focusQingdao(){
+    if(!opened||!view)return;
+    closeDrawer();view.select(QINGDAO_ID);view.focusDiorama();
+  }
   function update(refreshMap=true){
     const cities=new Map();for(const r of sorted(records)){if(!cities.has(r.cityId))cities.set(r.cityId,{count:0,date:r.date});cities.get(r.cityId).count++;}
     const list=el('travel-city-list');list.replaceChildren();const query=el('travel-filter').value.trim();
     const filtered=[...cities].filter(([id])=>(CITY_BY_ID.get(id).province+CITY_BY_ID.get(id).name).includes(query));
-    if(!filtered.length){const empty=make(list,'div',!cities.size?'暂无足迹':'没有找到这个城市。','travel-empty');if(!cities.size)action(empty,'添加足迹',()=>openForm(), 'travel-primary');}
-    for(const [id,info] of filtered){const city=CITY_BY_ID.get(id),button=action(list,'',()=>showCity(id),'travel-city-card');button.setAttribute('aria-label',`${cityName(city)}，${info.count} 段回忆`);make(button,'span','','city-light');const content=make(button,'span');make(content,'strong',cityName(city));make(content,'small',`${city.province} · ${info.count} 段回忆`);make(button,'span','›','chevron');}
+    let added=false;
+    for(const [id,info] of filtered){added=true;const city=CITY_BY_ID.get(id),button=action(list,'',()=>showCity(id),'travel-city-card');button.setAttribute('aria-label',`${cityName(city)}，${info.count} 段回忆`);make(button,'span','','city-light');const content=make(button,'span');make(content,'strong',cityName(city));make(content,'small',`${city.province} · ${info.count} 段回忆${id===QINGDAO_ID?' · 微缩场景':''}`);make(button,'span','›','chevron');}
+    if(!cities.has(QINGDAO_ID)&&(!query||'青岛山东省'.includes(query))){added=true;const city=CITY_BY_ID.get(QINGDAO_ID),button=action(list,'',()=>focusQingdao(),'travel-city-card travel-landmark-card');button.setAttribute('aria-label','青岛，微缩场景');make(button,'span','','city-light landmark-light');const content=make(button,'span');make(content,'strong','青岛');make(content,'small','山东省 · 微缩场景');make(button,'span','✦','chevron');}
+    if(!added){const empty=make(list,'div',cities.size?'没有找到这个城市。':'暂无足迹，可先点「青岛」看看微缩场景。','travel-empty');if(!cities.size)action(empty,'添加足迹',()=>openForm(), 'travel-primary');}
     if(refreshMap)view?.setRecords(records);
   }
   function resetForm(){generation++;processing=false;dirty=false;draftPhotos=[];editingId=null;chosenCity=null;el('journey-photos').value='';el('journey-city-options').hidden=true;el('journey-city').setAttribute('aria-expanded','false');view?.setPreview(null);}
-  async function showList(skipGuard=false){if(!skipGuard&&!await guard())return;resetForm();cityId=null;recordId=null;view?.select(null);setPanel('travel-city-list-view');}
+  async function showList(skipGuard=false){if(!skipGuard&&!await guard())return;resetForm();cityId=null;recordId=null;view?.select(null);setPanel('travel-city-list-view');openDrawer();el('travel-filter').focus();}
   async function showCity(id,skipGuard=false){
     if(!skipGuard&&!await guard())return;
     const city=CITY_BY_ID.get(id);if(!city||!records.some(r=>r.cityId===id))return;
-    resetForm();if(cityId!==id)recordId=null;cityId=id;view?.select(id);setPanel('travel-detail-view');
+    resetForm();if(cityId!==id)recordId=null;cityId=id;view?.select(id);setPanel('travel-detail-view');openDrawer();
     renderDetail();el('travel-city-title').focus({preventScroll:true});
   }
   function showPhoto(record,index){
@@ -39,8 +55,9 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
   function nextPhoto(delta){const dialog=el('travel-lightbox');dialog._index=Math.max(0,Math.min(dialog._record.photos.length-1,dialog._index+delta));renderPhoto();}
   function renderDetail(){
     const city=CITY_BY_ID.get(cityId);if(!city)return;
-    const entries=sorted(records.filter(r=>r.cityId===cityId));el('travel-city-title').textContent=cityName(city);el('travel-city-meta').textContent=`${city.province} · ${entries.length} 段回忆`;
+    const entries=sorted(records.filter(r=>r.cityId===cityId));el('travel-city-title').textContent=cityName(city);el('travel-city-meta').textContent=`${city.province} · ${entries.length} 段回忆${cityId===QINGDAO_ID?' · 微缩场景':''}`;
     const detail=el('travel-record-detail'),list=el('travel-record-list');detail.replaceChildren();list.replaceChildren();
+    if(cityId===QINGDAO_ID){const cta=action(detail,'进入微缩场景',()=>focusQingdao(),'travel-primary travel-diorama-cta');cta.setAttribute('aria-label','进入青岛微缩场景');}
     if(!entries.length){make(detail,'p','这里还没有回忆。给这座城市留下一段我们的故事吧。','travel-empty');return;}
     const record=entries.find(r=>r.id===recordId)||entries[0];recordId=record.id;
     const article=make(detail,'article',undefined,'travel-record-detail');const date=make(article,'time',record.date.replaceAll('-','.'));date.dateTime=record.date;
@@ -70,7 +87,7 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
     el('journey-date').value=record?.date||new Date().toLocaleDateString('sv-SE');el('journey-title').value=record?.title||'';el('journey-note').value=record?.note||'';el('journey-error').hidden=true;el('journey-save').disabled=false;el('journey-upload').disabled=false;
     el('travel-form-title').textContent=record?'编辑足迹':'添加足迹';el('journey-save').textContent='保存';
     if(chosenCity){el('journey-city').value=chosenCity.province+' · '+cityName(chosenCity);view?.setPreview(chosenCity.id);}
-    draftPreviews();setPanel('travel-form-view');el('journey-city').focus({preventScroll:true});
+    draftPreviews();setPanel('travel-form-view');openDrawer();el('journey-city').focus({preventScroll:true});
   }
   form.addEventListener('input',()=>dirty=true);
   el('journey-city').addEventListener('input',suggestions);
@@ -97,18 +114,34 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
   function open(updateURL=true){
     if(opened)return;opened=true;onOpen();page.hidden=false;
     if(updateURL&&location.hash!=='#map')history.pushState(null,'','#map');
-    try{if(!view)view=createTravelScene(el('travel-map-stage'),id=>{if(!el('travel-form-view').hidden||saving)return;if(id)showCity(id);else if(!el('travel-detail-view').hidden)showList();});view.reset();view.setActive(true);view.setRecords(records);el('travel-map-loading').hidden=true;}catch(error){console.error(error);el('travel-map-loading').textContent='3D 地图暂时无法显示，请开启浏览器硬件加速。城市列表和记录仍可使用。';}
-    showList(true);el('travel-add').focus({preventScroll:true});if(!loaded)toast('正在读取本地足迹…');
+    try{
+      if(!view)view=createTravelScene(el('travel-map-stage'),id=>{
+        if(!el('travel-form-view').hidden||saving)return;
+        if(id===QINGDAO_ID){focusQingdao();return;}
+        if(id)showCity(id);
+        else if(view?.isFocused())view.exitDiorama();
+        else if(!el('travel-detail-view').hidden)showList();
+      },focused=>{
+        focusActive=focused;page.classList.toggle('travel-focused',focused);focusBack.hidden=!focused;
+        if(focused){closeDrawer();requestAnimationFrame(()=>focusBack.focus({preventScroll:true}));}
+        else if(opened){requestAnimationFrame(()=>el('travel-drawer-toggle').focus({preventScroll:true}));}
+      });
+      view.reset();view.setActive(true);view.setRecords(records);el('travel-map-loading').hidden=true;
+    }catch(error){console.error(error);el('travel-map-loading').textContent='3D 地图暂时无法显示，请开启浏览器硬件加速。城市列表和记录仍可使用。';}
+    closeDrawer();setPanel('travel-city-list-view');el('travel-add').focus({preventScroll:true});if(!loaded)toast('正在读取本地足迹…');
   }
   async function close(updateURL=true){
     if(!opened)return true;if(!await guard()){if(!updateURL)history.replaceState(null,'','#map');return false;}
-    resetForm();opened=false;page.hidden=true;view?.setActive(false);el('travel-lightbox').close();onClose();if(updateURL&&location.hash==='#map')history.replaceState(null,'',location.pathname+location.search);return true;
+    resetForm();closeDrawer();focusActive=false;page.classList.remove('travel-focused');focusBack.hidden=true;opened=false;page.hidden=true;view?.setActive(false);el('travel-lightbox').close();onClose();if(updateURL&&location.hash==='#map')history.replaceState(null,'',location.pathname+location.search);return true;
   }
-  el('travel-back').onclick=()=>close();el('travel-add').onclick=()=>openForm();el('travel-city-add').onclick=()=>openForm(cityId);el('travel-close-detail').onclick=async()=>{await showList();el('travel-filter').focus();};el('travel-close-form').onclick=async()=>{if(!await guard())return;if(cityId)showCity(cityId,true);else showList(true);};
+  el('travel-back').onclick=()=>close();el('travel-add').onclick=()=>openForm();el('travel-city-add').onclick=()=>openForm(cityId);el('travel-close-detail').onclick=async()=>{await showList();};el('travel-close-form').onclick=async()=>{if(!await guard())return;if(cityId)showCity(cityId,true);else showList(true);};
+  el('travel-drawer-close').onclick=closeDrawer;overlay.onclick=closeDrawer;
+  el('travel-drawer-toggle').onclick=()=>{if(page.classList.contains('drawer-open')){closeDrawer();return;}if(!el('travel-form-view').hidden||!el('travel-detail-view').hidden){openDrawer();return;}setPanel('travel-city-list-view');openDrawer();};
+  el('travel-focus-back').onclick=()=>view?.exitDiorama();
   el('travel-filter').oninput=()=>update(false);el('travel-backup').onclick=onExport;el('travel-import').onclick=onImport;
   el('travel-zoom-in').onclick=()=>view?.zoom(1.15);el('travel-zoom-out').onclick=()=>view?.zoom(1/1.15);el('travel-reset').onclick=()=>view?.reset();
   el('travel-lightbox-close').onclick=()=>el('travel-lightbox').close();el('travel-photo-prev').onclick=()=>nextPhoto(-1);el('travel-photo-next').onclick=()=>nextPhoto(1);
-  document.addEventListener('keydown',event=>{if(el('travel-lightbox').open){if(event.key==='ArrowLeft')nextPhoto(-1);if(event.key==='ArrowRight')nextPhoto(1);return;}if(!opened||modalOpen())return;if(event.key==='Escape'){if(!el('journey-city-options').hidden){el('journey-city-options').hidden=true;el('journey-city').setAttribute('aria-expanded','false');return;}if(!el('travel-form-view').hidden)el('travel-close-form').click();else if(!el('travel-detail-view').hidden)showList();}});
+  document.addEventListener('keydown',event=>{if(el('travel-lightbox').open){if(event.key==='ArrowLeft')nextPhoto(-1);if(event.key==='ArrowRight')nextPhoto(1);return;}if(view?.isFocused()){if(event.key==='Escape'){event.preventDefault();view.exitDiorama();}return;}if(!opened||modalOpen())return;if(event.key==='Escape'){if(page.classList.contains('drawer-open')){closeDrawer();return;}if(!el('journey-city-options').hidden){el('journey-city-options').hidden=true;el('journey-city').setAttribute('aria-expanded','false');return;}if(!el('travel-form-view').hidden)el('travel-close-form').click();else if(!el('travel-detail-view').hidden)showList();}});
   window.addEventListener('beforeunload',event=>{if(dirty||saving){event.preventDefault();event.returnValue='';}});
   const ready=journeyLoad().then(list=>{records=validJourneys(list);loaded=true;update();return true;}).catch(error=>{console.error(error);toast('浏览器存储不可用，足迹暂时无法保存。请关闭旧窗口后刷新。');return false;});
   return {open,close,ready,toast,mapBounds:()=>view?.mapBounds(),fit:()=>view?.fit(),isWorking:()=>processing||saving,prepareImport:async()=>{if(!await guard())return false;if(!el('travel-form-view').hidden)await showList(true);return true;},isOpen:()=>opened,isReady:()=>loaded,getRecords:()=>records,replaceRecords:list=>{records=list;update();if(cityId&&!el('travel-detail-view').hidden)renderDetail();}};

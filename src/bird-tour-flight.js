@@ -12,8 +12,8 @@ export function createBirdTourFlight({room,bird,camera,controls,targets,invalida
     room.updateWorldMatrix(true,true);room.attach(bird);controls.enabled=false;last=null;
     invalidate();return true;
   }
-  function fly(id,arrive){
-    if(!rest||flight||!targets[id])return false;
+  function fly(id,arrive,redirect=false){
+    if(!rest||!targets[id]||(flight&&!redirect))return false;
     room.updateWorldMatrix(true,true);
     if(bird.parent!==room)room.attach(bird);
     const to=id==='home'?room.worldToLocal(rest.parent.localToWorld(rest.position.clone())):targets[id].point();

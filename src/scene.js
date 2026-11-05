@@ -152,7 +152,7 @@ export function createRoom(container, onSelect, {projection=false}={}) {
   const fabricTexture = canvasTexture((ctx, W, H) => { ctx.fillStyle = '#eee6d1'; ctx.fillRect(0, 0, W, H); for(let y=0;y<H;y+=64)for(let x=0;x<W;x+=64){ctx.strokeStyle='#b9bfa4';ctx.lineWidth=1.5;ctx.strokeRect(x+5,y+5,54,54);ctx.strokeStyle='#a4ad8c';ctx.beginPath();ctx.ellipse(x+32,y+32,11,7,0,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#cab18e';ctx.beginPath();ctx.arc(x+32,y+32,2.5,0,Math.PI*2);ctx.fill();} }, 512, 512);
   fabricTexture.wrapS = fabricTexture.wrapT = THREE.RepeatWrapping; fabricTexture.repeat.set(2.3, 1.3);
   const fabric = new THREE.MeshStandardMaterial({ map: fabricTexture, roughness: 1 });
-  const sofa = group(room, -3.16+LIVING_SHIFT, FLOOR, .62, 'sofa'); sofa.rotation.y = Math.PI / 2;
+  const sofa = group(room, -3.16+LIVING_SHIFT, FLOOR, .62); sofa.rotation.y = Math.PI / 2;
   for (const x of [-1.23, 1.23]) for (const z of [-.42, .42]) cyl(sofa, x, .18, z, .055, .075, .35, '#946847', 12);
   box(sofa, 0, .37, 0, 2.95, .36, 1.2, '#ac7350', .12);
   box(sofa, 0, .72, -.48, 2.9, 1.08, .29, fabric, .11);
@@ -167,7 +167,7 @@ export function createRoom(container, onSelect, {projection=false}={}) {
   const rugBase=mesh(new THREE.BoxGeometry(5.25,.025,3.55),'#71878b',room,-.9,FLOOR+.013,.65);
   rugBase.name='Rectangular rug backing';rugBase.castShadow=false;
   const rug = mesh(new THREE.PlaneGeometry(5.25, 3.55), new THREE.MeshStandardMaterial({ map: rugTex, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }), room, -.9, FLOOR + .033, .65); rug.rotation.x = -Math.PI/2; rug.castShadow=false; rug.name='Rectangular rug surface';
-  const table = group(room, .40, FLOOR + .028, 1.05, 'sofa');
+  const table = group(room, .40, FLOOR + .028, 1.05);
   table.name='Oval coffee table';table.rotation.y=Math.PI/2;
   for (const x of [-.66, .66]) for (const z of [-.36, .36]) {
     const leg=mesh(new THREE.CapsuleGeometry(.115,.48,8,20),'#b18a58',table,x,.355,z);
@@ -175,7 +175,7 @@ export function createRoom(container, onSelect, {projection=false}={}) {
   }
   const top = cyl(table,0,.76,0,1,1,.16,'#dfbd81',64);top.scale.set(1.18,1,.69);
   // White roses, chamomile and silver-green eucalyptus in a stonewashed vase.
-  const tableVase=group(table,.19,.845,-.07);tableVase.name='White rose and eucalyptus arrangement';tableVase.scale.setScalar(.9);
+  const tableVase=group(table,.19,.845,-.07,'vase');tableVase.name='White rose and eucalyptus arrangement';tableVase.scale.setScalar(.9);
   const vaseProfile=[[0,0],[.19,0],[.27,.045],[.3,.17],[.295,.32],[.25,.48],[.205,.55],[.205,.61],[.22,.62],[.22,.642],[.18,.642],[.18,.54],[.22,.44],[.255,.28],[.25,.1],[.16,.03],[0,.03]];
   const vaseTexture=canvasTexture((ctx,W,H)=>{
     ctx.fillStyle='#a0a39a';ctx.fillRect(0,0,W,H);
@@ -267,7 +267,7 @@ export function createRoom(container, onSelect, {projection=false}={}) {
   contact(room,.78,-3.00,1.2,.9,.22);
 
   // Recording desk with speakers, audio interface, headphones and microphone.
-  const studio=group(room,2.65,FLOOR,-2.36,'studio');
+  const studio=group(room,2.8,FLOOR,-2.36,'studio');
   for(const x of [-.96,.96])for(const z of [-.4,.4])box(studio,x,.67,z,.09,1.32,.1,'#a88a5c',.016);
   box(studio,0,1.37,0,2.45,.14,1.11,'#dfc495',.042);box(studio,0,.89,.08,2.14,.31,.84,'#c5a574',.025);
   for(const x of [-.54,.54])box(studio,x,.89,.516,.95,.23,.025,'#d4b681',.008);
@@ -300,10 +300,10 @@ export function createRoom(container, onSelect, {projection=false}={}) {
     box(headphones,x*.81,-.11,.09,.038,.145,.095,'#b1b59b',.016);
   }
   // Small rounded studio stool.
-  const stool=group(room,2.5,FLOOR,-.81);
+  const stool=group(room,2.65,FLOOR,-.81);
   for(const x of [-.22,.22])for(const z of [-.22,.22])cyl(stool,x,.38,z,.03,.045,.72,'#aa8b5e',12);
   cyl(stool,0,.8,0,.38,.38,.14,'#b7c199');cyl(stool,0,.7,0,.32,.32,.05,'#b69765');
-  contact(room,2.63,-2.23,2.7,1.7,.2);
+  contact(room,2.78,-2.23,2.7,1.7,.2);
 
   // Books, records and small bouquets in narrow-neck ceramic vases.
   for(let i=0;i<4;i++)box(console,-1.21+i*.12,1.14,-.03,.085,.42+i*.025,.35,['#b67f67','#8a9b79','#d6bd88','#9eaaa2'][i],.009);
@@ -331,8 +331,8 @@ export function createRoom(container, onSelect, {projection=false}={}) {
   const sharedMap=createChinaMapModel(),map=sharedMap.group,mapPlane=sharedMap.face;
   map.position.set(-4.355,2.82,1.05);map.rotation.y=Math.PI/2;room.add(map);objects.push(map);
 
-  // A little wooden birdhouse; keep the original memory id to preserve its stories.
-  const bird=group(room,3.65,FLOOR,2.60,'bird');bird.rotation.y=-.18;bird.name='Little wooden birdhouse';
+  // A little wooden birdhouse; the bird is the tour guide, not a memory entry.
+  const bird=group(room,3.65,FLOOR,2.60);bird.rotation.y=-.18;bird.name='Little wooden birdhouse';
   // Wooden pedestal and upright support beneath the house.
   cyl(bird,0,.055,0,.33,.38,.1,'#d2b17c');box(bird,0,.59,0,.075,1.1,.075,'#b49461',.014);
   const house=group(bird,0,1.13,0);

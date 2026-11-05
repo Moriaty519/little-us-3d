@@ -25,9 +25,13 @@ try{
  assert.equal(await page.locator('#bird-tour-start').textContent(),'跟随参观');assert.equal(await page.locator('#bird-tour-explore').textContent(),'自由探索');
  await page.locator('#bird-tour-explore').click();assert.equal(await page.locator('#bird-tour-cue').isHidden(),true);assert.equal((await state(page)).state,'hidden');
  await page.evaluate(()=>window.__tourUI.showCue());await page.waitForSelector('#bird-tour-cue:visible');
- // Clicking the original wooden house opens its memories, while only its bird starts the tour.
+ // The wooden house is decoration now; only the bird starts the tour.
+ assert.equal(await page.locator('[data-object="bird"]').count(),0);
+ assert.equal(await page.locator('[data-object="vase"]').count(),1);
+ await page.locator('#bird-tour-explore').click();
  const housePoint=await page.evaluate(()=>{const h=window.__tourRoom;const p=h.house.localToWorld(new h.bird.position.constructor(.26,.55,.43)).project(h.camera);return {x:(p.x+1)*innerWidth/2,y:(1-p.y)*innerHeight/2};});
- await page.mouse.click(housePoint.x,housePoint.y);await page.waitForSelector('#object-panel:visible');assert.equal((await state(page)).state,'hidden');await page.locator('#close-object').click();
+ await page.mouse.click(housePoint.x,housePoint.y);await page.waitForTimeout(150);assert.equal(await page.locator('#object-panel').isHidden(),true);assert.equal((await state(page)).state,'hidden');
+ await page.locator('[data-object="vase"]').click();await page.waitForSelector('#object-panel:visible');assert.equal(await page.locator('#object-title').textContent(),'花瓶');await page.locator('#close-object').click();await page.evaluate(()=>window.__tourUI.showCue());await page.waitForSelector('#bird-tour-cue:visible');
  const before=await snapshot(page);await clickBird(page);await waitStop(page,0);assert.equal((await state(page)).id,'bird');assert.equal((await snapshot(page)).controls,false);
  assert.equal(await page.locator('#bird-tour-prev').isDisabled(),true);assert.equal(await page.locator('#bird-tour-mark').count(),0);assert.equal(await page.locator('#bird-tour-link').count(),0);assert.equal(await page.locator('#bird-tour-enter').count(),0);assert.equal(await page.locator('#bird-tour-panel #bird-tour-skip').count(),0);
  const skipBox=await page.locator('#bird-tour-skip').boundingBox();assert.ok(skipBox.x<100&&skipBox.y<60);assert.equal(await page.locator('#bird-tour-prev').textContent(),'上一步');assert.equal(await page.locator('#bird-tour-next').textContent(),'下一步');
@@ -45,9 +49,8 @@ try{
  const returned=await snapshot(page);assert.equal(returned.parent,true);assert.deepEqual(returned.position,[0,.251,.646]);assert.deepEqual(returned.scale,[.16,.16,.16]);assert.equal(returned.controls,true);assert.deepEqual(returned.camera,before.camera);assert.deepEqual(returned.target,before.target);
  assert.equal((await state(page)).state,'hidden');
  // Cancel in flight, then ensure its late callback cannot resurrect the panel.
- await clickBird(page);await page.locator('#bird-tour-skip').click();await page.waitForTimeout(2500);assert.equal((await state(page)).state,'hidden');assert.equal((await snapshot(page)).parent,true);
+ await clickBird(page);await page.locator('#bird-tour-skip').click();await page.waitForFunction(()=>window.__tourUI.getState().state==='hidden',null,{timeout:5500});assert.equal((await state(page)).state,'hidden');assert.equal((await snapshot(page)).parent,true);
  await clickBird(page);await waitStop(page,0);await page.locator('#opening-replay').click();await page.waitForSelector('#opening-page:visible');assert.equal((await snapshot(page)).parent,true);await page.keyboard.press('Escape');await page.waitForSelector('#bird-tour-cue:visible');
- await page.locator('#bird-tour-start').click();await waitStop(page,0);await page.locator('[data-object="bird"]').click();await page.waitForSelector('#object-panel:visible');await page.locator('#close-object').click();
  // Faster route verification uses the same UI, with the OS reduced-motion preference.
  await page.emulateMedia({reducedMotion:'reduce'});
  for(const [index,hash,pageId,back] of [[1,'#album','album-page','album-back'],[2,'#ktv','ktv-page','ktv-back'],[3,'#map','travel-page','travel-back'],[4,'#cinema','cinema-page','cinema-back']]){
@@ -61,7 +64,7 @@ try{
   if(i<4){await phone.locator('#bird-tour-next').click();await waitStop(phone,i+1);}
  }
  await phone.screenshot({path:new URL('preview/bird-tour-mobile-screen.png',root).pathname});await phone.locator('#bird-tour-next').click();await phone.waitForSelector('#bird-tour-panel[data-state="done"]');assert.equal((await snapshot(phone)).parent,true);
- const offline=await browser.newPage({viewport:{width:1024,height:768},reducedMotion:'reduce'});offline.on('pageerror',e=>errors.push(e.message));await offline.goto(new URL('little-us.html',root).href);await offline.keyboard.press('Escape');await offline.waitForSelector('#bird-tour-cue:visible');await offline.locator('#bird-tour-start').click();await offline.waitForSelector('#bird-tour-panel[data-state="stop"]');assert.equal(await offline.locator('#bird-tour-title').textContent(),'小木屋');await offline.locator('#bird-tour-skip').click();
+ const offline=await browser.newPage({viewport:{width:1024,height:768},reducedMotion:'reduce'});offline.on('pageerror',e=>errors.push(e.message));await offline.goto(new URL('little-us.html',root).href);await offline.keyboard.press('Escape');await offline.waitForSelector('#bird-tour-cue:visible');await offline.locator('#bird-tour-start').click();await offline.waitForSelector('#bird-tour-panel[data-state="stop"]');assert.equal(await offline.locator('#bird-tour-title').textContent(),'小木屋');await offline.locator('#bird-tour-skip').click();await offline.waitForTimeout(2600);
  assert.deepEqual(errors,[]);
- console.log('PASS: actual bird versus wooden house picking; forward/backward tour; no dashed outlines or entry buttons; top-left skip; hidden flight cards; visible furniture; cancellation/replay; all five entry links; camera/parent restoration; mobile layout; reduced motion; offline HTML; no browser errors.');
+ console.log('PASS: actual bird versus wooden house picking; forward/backward tour; no dashed outlines or entry buttons; top-left skip; hidden flight cards; visible furniture; cancellation/replay; all four entry links; camera/parent restoration; mobile layout; reduced motion; offline HTML; no browser errors.');
 }finally{await browser.close();}

@@ -28,7 +28,7 @@ export async function memorySaveBatch(records){await memoryTransaction('readwrit
 export function validBackup(data){
   if(data?.format!=='little-us-backup'||data.version!==1||!Array.isArray(data.memories)||data.memories.length>1000)throw new Error('这不是有效的小屋备份文件。');
   const ids=new Set();
-  const objectIds=['guitar','studio','screen','bird','photos','sofa'];
+  const objectIds=['guitar','studio','screen','bird','photos','sofa','vase'];
   const records=data.memories.map(m=>{
     if(!m||typeof m.id!=='string'||!m.id||m.id.length>120||ids.has(m.id)||typeof m.title!=='string'||!m.title.trim()||m.title.length>60||typeof m.note!=='string'||m.note.length>2000||!objectIds.includes(m.objectId)||typeof m.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(m.date)||!Number.isFinite(Date.parse(m.date))||new Date(m.date).toISOString().slice(0,10)!==m.date||typeof m.createdAt!=='string'||!Number.isFinite(Date.parse(m.createdAt))||typeof m.updatedAt!=='string'||!Number.isFinite(Date.parse(m.updatedAt)))throw new Error('备份内容不完整，尚未导入任何回忆。');
     if(m.photo!==null&&(typeof m.photo!=='string'||m.photo.length>6_000_000||!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(m.photo)))throw new Error('备份中的照片格式不正确。');

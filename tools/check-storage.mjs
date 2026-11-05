@@ -6,6 +6,7 @@ const {validBackup}=await import('data:text/javascript;base64,'+Buffer.from(sour
 const record={id:'qa-memory',title:'一首歌',note:'一起唱',objectId:'guitar',date:'2026-10-31',photo:null,createdAt:'2026-10-31T03:00:00.000Z',updatedAt:'2026-10-31T03:00:00.000Z'};
 const backup=records=>({format:'little-us-backup',version:1,memories:records});
 assert.deepEqual(validBackup(backup([record])),[record]);
+assert.deepEqual(validBackup(backup([{...record,objectId:'vase'}])),[{...record,objectId:'vase'}]);
 assert.throws(()=>validBackup(backup([{...record,date:'2026-02-30'}])));
 assert.throws(()=>validBackup(backup([{...record,photo:'data:image/svg+xml;base64,PHN2Zz4='}])));
 assert.throws(()=>validBackup(backup([{...record,objectId:'unknown'}])));

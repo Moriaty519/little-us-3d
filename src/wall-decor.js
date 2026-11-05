@@ -19,7 +19,7 @@ export function createHomeLighting(){
   return {sky,sun,fill};
 }
 
-export function createChinaMapModel(){
+export function createChinaMapModel({focusMode=false}={}){
   const dimensions=WALL_DECOR_LAYOUT.map;
   const group=new THREE.Group();group.name='Framed China map';group.userData.objectId='map';
   const frame=decorBox(group,0,0,0,dimensions.width,dimensions.height,.075,'#bd9b67',.016);
@@ -27,15 +27,23 @@ export function createChinaMapModel(){
   const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=720;
   drawChinaMap(canvas.getContext('2d'),canvas.width,canvas.height);
   const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
+  let focusTexture=null;
+  if(focusMode){
+    const quiet=document.createElement('canvas');quiet.width=canvas.width;quiet.height=canvas.height;
+    drawChinaMap(quiet.getContext('2d'),quiet.width,quiet.height,{labels:false});
+    focusTexture=new THREE.CanvasTexture(quiet);focusTexture.colorSpace=THREE.SRGBColorSpace;
+  }
   // The printed paper keeps exactly the same colors in both lighting setups.
-  const face=decorMesh(group,new THREE.PlaneGeometry(dimensions.faceWidth,dimensions.faceHeight),new THREE.MeshBasicMaterial({map:texture,toneMapped:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-2}),0,0,dimensions.faceZ);
+  const faceMaterial=new THREE.MeshBasicMaterial({map:texture,toneMapped:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-2});
+  const face=decorMesh(group,new THREE.PlaneGeometry(dimensions.faceWidth,dimensions.faceHeight),faceMaterial,0,0,dimensions.faceZ);
   face.castShadow=false;face.receiveShadow=false;
+  function setFocusMode(value){if(!focusTexture)return;const next=value?focusTexture:texture;if(faceMaterial.map!==next){faceMaterial.map=next;faceMaterial.needsUpdate=true;}}
   const layout=chinaMapLayout(canvas.width,canvas.height);
   function point(lon,lat,lift=.004){
     const [x,y]=layout.project([lon,lat]);
     return new THREE.Vector3((x/canvas.width-.5)*dimensions.faceWidth,(.5-y/canvas.height)*dimensions.faceHeight,dimensions.faceZ+lift);
   }
-  return {group,face,point,frame,backing};
+  return {group,face,point,frame,backing,setFocusMode};
 }
 
 export function createWindowModel(){

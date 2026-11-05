@@ -30,6 +30,15 @@ for(const id of [...BIRD_TOUR_STOPS.map(s=>s.id),'home']){
 }
 assert.deepEqual(arrivals,['bird','photos','guitar','map','screen','home']);
 flight.end();assert.equal(bird.parent,house);assert.ok(bird.position.equals(rest.position));assert.ok(bird.quaternion.equals(rest.quaternion));assert.ok(bird.scale.equals(rest.scale));assert.equal(controls.enabled,true);
+flight.begin();
+let redirected=[];
+assert.equal(flight.fly('screen',()=>assert.fail('redirected arrival fired')),true);
+flight.update(0);flight.update(300);
+assert.equal(flight.fly('home',()=>redirected.push('home'),true),true,'skip must redirect from the current bird position');
+for(let t=350;t<5000&&flight.isFlying();t+=50)flight.update(t);
+assert.equal(flight.isFlying(),false);assert.deepEqual(redirected,['home']);
+room.updateWorldMatrix(true,true);assert.equal(bird.parent,house);
+flight.end();
 flight.begin();flight.fly('map',()=>assert.fail('cancelled arrival fired'));flight.update(0);flight.update(100);flight.end();flight.update(10000);assert.ok(bird.position.equals(rest.position));assert.equal(flight.isActive(),false);
 controls.enabled=false;flight.begin();flight.fly('screen',()=>arrivals.push('reduced'));flight.update(0,true);assert.equal(flight.isFlying(),false);assert.equal(arrivals.at(-1),'reduced');flight.end();assert.equal(controls.enabled,false,'restore previous control state');
 assert.ok(draws>0);

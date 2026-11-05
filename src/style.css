@@ -42,7 +42,7 @@
 /* A live paper envelope unfolds on scored hinges beneath the original room. */
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .opening-page{position:fixed;inset:0;z-index:30;overflow:visible;background:transparent;color:#5a654e}.opening-page:before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 42%,#faf6eb,#eee8d9);transition:opacity 1.25s}.opening-entering:before{opacity:0}
-.opening-header{position:absolute;top:27px;left:32px;right:32px;display:flex;align-items:center;justify-content:space-between;gap:14px;z-index:8}.opening-brand{font:italic 24px Georgia,serif;letter-spacing:-.5px;color:#637050}.opening-header>div{display:flex;align-items:center;gap:14px}.opening-header button{border:0;background:transparent;color:#798368;padding:9px 5px;font-size:11px;letter-spacing:.3px}.opening-header #opening-sound{display:grid;place-items:center;width:32px;height:32px;padding:5px;border-radius:50%}.opening-header svg{width:18px;height:18px;stroke-width:1.3}.opening-mute-line{display:none}.muted .opening-mute-line{display:block}.muted svg{opacity:.65}
+.opening-header{position:absolute;top:27px;left:32px;right:32px;display:flex;align-items:center;justify-content:space-between;gap:14px;z-index:8}.opening-brand{font:italic 24px Georgia,serif;letter-spacing:-.5px;color:#637050}.opening-header>div{display:flex;align-items:center;gap:14px}.opening-header button{border:0;background:transparent;color:#798368;padding:9px 5px;font-size:11px;letter-spacing:.3px}.opening-header svg{width:18px;height:18px;stroke-width:1.3}
 .opening-room-slot{position:absolute;inset:0;z-index:1;cursor:pointer;border:0;border-radius:0;overflow:visible}.opening-room-slot canvas,.opening-flight canvas{display:block;width:100%;height:100%;touch-action:none}.opening-seal{position:absolute;z-index:6;left:50%;top:50%;transform:translate(-50%,-50%);width:74px;height:74px;background:transparent;border:0;border-radius:50%;box-shadow:none;transition:opacity .2s;cursor:pointer}.opening-seal:active{transform:translate(-50%,-50%) scale(.97)}.opening-seal:focus-visible{outline:0}.opening-seal:focus-visible:after{content:"";position:absolute;inset:15px;border:1px solid #82916d;border-radius:50%}.opening-seal:hover{background:#dfe7c919}.opening-unfolding .opening-seal{opacity:0;pointer-events:none;visibility:hidden}
 .opening-letter{position:absolute;inset:92px 24px 35px;z-index:5;text-align:center;pointer-events:none;opacity:0;transition:opacity .7s,transform .7s;transform:translateY(7px)}.opening-letter h1{font:400 clamp(23px,2.7vw,30px)/1.5 "Songti SC","Noto Serif SC",serif;letter-spacing:.075em;margin:0 0 11px;color:#626c54}.opening-letter p{font:12px/1.8 "Songti SC",serif;letter-spacing:.055em;margin:0;color:#959b83}.opening-open .opening-letter{opacity:1;transform:translateY(0)}
 .opening-footnote{position:absolute;z-index:5;pointer-events:none;bottom:49px;left:20px;right:20px;text-align:center;font:11px "Songti SC",serif;color:#98a083;letter-spacing:.15em;margin:0;transition:opacity .4s}.opening-unfolding .opening-footnote{opacity:0}.opening-page>noscript{position:absolute;bottom:18px;left:20px;right:20px;text-align:center;font-size:12px}.opening-flight{position:fixed;inset:0;z-index:7;pointer-events:none}.opening-entering .opening-letter,.opening-entering .opening-header{opacity:0;pointer-events:none;transition:opacity .35s}#app[inert] .topbar,#app[inert] .object-shortcuts,#app[inert] .bottom-bar{visibility:hidden}.room-arriving .topbar,.room-arriving .object-shortcuts,.room-arriving .bottom-bar{animation:room-ui-arrive .55s ease-out both}@keyframes room-ui-arrive{from{opacity:0}to{opacity:1}}.opening-replay{margin-right:auto;display:inline-flex;align-items:center;gap:7px;border:0;background:transparent;padding:8px 2px;color:#a1977f;font-size:10px;pointer-events:auto;letter-spacing:.3px}.opening-replay svg{width:15px;height:15px;stroke-width:1.25}
@@ -95,3 +95,32 @@
 .travel-city-label:active{transform:scale(.97)}
 .travel-city-label.highlighted{border-color:#b69b5b;background:#fff3d2;z-index:3}
 @media(max-width:700px){.travel-city-label{font-size:10px;padding:3px 6px}}
+
+/* Map drawer and Qingdao focus mode */
+.travel-drawer-toggle{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 14px;border:1px solid #fffbef;border-radius:20px;background:#fbf6e7;color:#56604e;font-size:12px;white-space:nowrap}
+.travel-drawer-toggle svg{width:16px;height:16px}
+#travel-page .travel-sidebar{top:99px;bottom:28px;right:30px;width:392px;transform:translateX(calc(100% + 52px));transition:transform .28s cubic-bezier(.2,.8,.2,1);z-index:7;box-shadow:0 18px 65px #3d472f2e}
+#travel-page.drawer-open .travel-sidebar{transform:none}
+.travel-drawer-close{position:absolute;right:16px;top:16px;z-index:2;background:#f0eddf;color:#8a957b}
+.travel-drawer-overlay{position:absolute;inset:0;z-index:6;background:#35402c33;backdrop-filter:blur(2px)}
+.travel-focus-back{position:absolute;left:32px;top:28px;z-index:9;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 16px;border:1px solid #fffdf4;border-radius:22px;background:#fffaf0ee;color:#6c7a5d;font-size:12px;box-shadow:0 6px 24px #5b4d2e1c;backdrop-filter:blur(10px)}
+.travel-focus-back svg{width:16px;height:16px}
+#travel-page.travel-focused .travel-topbar,#travel-page.travel-focused .travel-footer,#travel-page.travel-focused .travel-drawer-toggle,#travel-page.travel-focused .travel-drawer-overlay,#travel-page.travel-focused .travel-sidebar{opacity:0;visibility:hidden;pointer-events:none}
+#travel-page.travel-focused .travel-labels{opacity:0;pointer-events:none}
+#travel-page .travel-topbar,#travel-page .travel-footer{transition:opacity .25s ease,visibility .25s}
+#travel-page .travel-footer{left:32px;right:32px}
+@media(max-width:700px){
+  .travel-drawer-toggle{padding:9px 10px}
+  .travel-drawer-toggle span:last-child{display:none}
+  #travel-page .travel-sidebar{left:14px;right:14px;top:auto;bottom:77px;width:auto;height:34dvh;transform:translateY(calc(100% + 92px));border-radius:18px}
+  #travel-page.drawer-open .travel-sidebar{transform:none}
+  .travel-focus-back{left:16px;top:18px;font-size:11px;padding:9px 13px}
+  #travel-page .travel-footer{left:15px;right:15px}
+}
+.travel-landmark-card{background:#fbf1de;border-color:#e5d2ad}
+.travel-landmark-card .landmark-light{background:#d9b274}
+.travel-landmark-card .landmark-light:after{background:#fff3c9}
+.travel-landmark-card .chevron{color:#c39a55}
+.travel-diorama-cta{width:100%;border-radius:14px;margin:0 0 18px;padding:12px}
+#travel-page .travel-topbar{z-index:8}
+#travel-page.form-open .travel-drawer-close{display:none}

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const {createOpening}=await import('data:text/javascript;base64,'+Buffer.from(await fs.readFile(new URL('../src/opening.js',import.meta.url),'utf8')).toString('base64'));
-const ids=['opening-page','opening-room-slot','opening-flight','opening-sound','opening-seal','opening-letter','opening-room-fallback','opening-replay','app'];
+const ids=['opening-page','opening-room-slot','opening-flight','opening-seal','opening-letter','opening-room-fallback','opening-replay','app'];
 const elements=Object.fromEntries(ids.map(id=>[id,{id,style:{},hidden:false,classList:{values:new Set(),add(...v){v.forEach(x=>this.values.add(x));},remove(...v){v.forEach(x=>this.values.delete(x));},toggle(v,enabled){enabled?this.add(v):this.remove(v);}},setAttribute(){},focus(){},getBoundingClientRect:()=>({left:0,top:0})}]));
 let reduced=false,frames=[],completed=0,calls=[];
 globalThis.document={getElementById:id=>{assert.ok(elements[id],`unexpected UI dependency: ${id}`);return elements[id];},addEventListener(){}};
