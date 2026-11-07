@@ -4,12 +4,13 @@ import { WALL_DECOR_LAYOUT } from './wall-layout.js';
 import { CITY_BY_ID, cityName } from './travel-storage.js';
 import { createTapTracker } from './ui.js';
 import { layoutTravelLabels } from './travel-labels.js';
-import { createQingdaoDiorama, QINGDAO_ID, QINGDAO_LONLAT } from './qingdao-diorama.js';
+import { createQingdaoIsland, QINGDAO_ID, QINGDAO_LONLAT } from './qingdao-island.js';
 
 const MAP_SCALE=WALL_DECOR_LAYOUT.view.scale;
 const MAP_WIDTH=WALL_DECOR_LAYOUT.map.width*MAP_SCALE;
 const MAP_HEIGHT=WALL_DECOR_LAYOUT.map.height*MAP_SCALE;
 const MAP_CENTER_Y=2.08;
+const FOCUS_DURATION=1700;
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const smooth=p=>{const value=clamp(p,0,1);return value*value*(3-2*value);};
 
@@ -34,16 +35,18 @@ export function createTravelScene(container,onSelect,onFocusChange=()=>{}){
   // A soft vertical wall sits behind the framed map. It fades away when the
   // map lies down and the wall map becomes a tabletop diorama.
   const backdrop=new THREE.Group();scene.add(backdrop);
-  const wallMaterial=new THREE.MeshStandardMaterial({color:'#7d9073',roughness:.92,transparent:true,opacity:1});
+  const wallMaterial=new THREE.MeshStandardMaterial({color:'#ece4d4',roughness:.92,transparent:true,opacity:1});
   const wallPlane=new THREE.Mesh(new THREE.PlaneGeometry(28,18),wallMaterial);wallPlane.position.set(0,MAP_CENTER_Y,-1.15);wallPlane.receiveShadow=true;backdrop.add(wallPlane);
-  const lineMaterial=new THREE.MeshStandardMaterial({color:'#6e8466',roughness:.9,transparent:true,opacity:.55});
+  const lineMaterial=new THREE.MeshStandardMaterial({color:'#dccfbc',roughness:.9,transparent:true,opacity:.55});
   for(let x=-14;x<=14;x+=.55){const line=new THREE.Mesh(new THREE.BoxGeometry(.012,18,.015),lineMaterial);line.position.set(x,MAP_CENTER_Y,-1.13);backdrop.add(line);}
   wallMaterial.userData.baseOpacity=1;lineMaterial.userData.baseOpacity=.55;
 
   const mapRoot=new THREE.Group();mapRoot.position.set(0,MAP_CENTER_Y,0);mapRoot.scale.setScalar(MAP_SCALE);scene.add(mapRoot);
-  const model=createChinaMapModel({focusMode:true});model.group.position.set(0,0,0);mapRoot.add(model.group);
+  const model=createChinaMapModel({focusMode:true});model.group.position.set(0,0,-.2548);mapRoot.add(model.group);
   const qingdaoLocal=model.point(QINGDAO_LONLAT[0],QINGDAO_LONLAT[1],.066);
-  const diorama=createQingdaoDiorama({scale:.2});diorama.root.position.copy(qingdaoLocal);model.group.add(diorama.root);
+  const island=createQingdaoIsland(container);
+  const travelPage=container.closest('#travel-page');
+  renderer.domElement.style.transition='opacity .6s ease';
 
   const markers=new THREE.Group();model.group.add(markers);
   const markerScale=.7*.13;
@@ -55,7 +58,7 @@ export function createTravelScene(container,onSelect,onFocusChange=()=>{}){
   const glowGeo=new THREE.PlaneGeometry(.6*.13,.6*.13),glowMat=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(glowCanvas),transparent:true,depthWrite:false,toneMapped:false});
   const ringMarker=makeRing(model.group);ringMarker.visible=false;
   let counts=new Map(),selected=null,preview=null,hovered=null,focused=null,labelEntries=[],active=true,last=0,labelsDirty=true,measureLabels=true,sceneDirty=true;
-  let userZoom=1,panX=0,panY=0,focusProgress=0,focusFrom=0,focusTarget=0,focusAnimating=false,focusStart=0,focusMode=false,focusAzimuth=0,focusElevation=.42,focusZoom=1,riseProgress=0,riseFrom=0,riseTarget=0,riseAnimating=false,riseStart=0;
+  let userZoom=1,panX=0,panY=0,focusProgress=0,focusFrom=0,focusTarget=0,focusAnimating=false,focusStart=0,focusMode=false,focusAzimuth=0,focusElevation=.42,focusZoom=1,islandVisible=false;
   let panning=null,pinch=null,orbit=null;const pointers=new Map();
 
   function makeRing(parent){const mesh=new THREE.Mesh(new THREE.TorusGeometry(.20*.13,.011*.13,6,48),new THREE.MeshBasicMaterial({color:'#cbae65',toneMapped:false}));mesh.castShadow=false;parent.add(mesh);return mesh;}
@@ -91,39 +94,40 @@ export function createTravelScene(container,onSelect,onFocusChange=()=>{}){
   }
   function focusViewHeight(w,h){
     const aspect=w/h;
-    return Math.max(2.1,1.35/aspect);
+    // Push in noticeably closer over the Qingdao pin before the map lies flat.
+    return Math.max(1.55,1.05/aspect);
   }
-  function qingdaoWorld(){return new THREE.Vector3(qingdaoLocal.x*MAP_SCALE,MAP_CENTER_Y+qingdaoLocal.z*MAP_SCALE,-qingdaoLocal.y*MAP_SCALE);}
+  function qingdaoWorld(){return new THREE.Vector3(qingdaoLocal.x*MAP_SCALE,MAP_CENTER_Y+(qingdaoLocal.z+model.group.position.z)*MAP_SCALE,-qingdaoLocal.y*MAP_SCALE);}
   function applyCamera(w=container.clientWidth,h=container.clientHeight){
     if(!w||!h)return;
     const aspect=w/h,p=smooth(focusProgress);
     const wallHeight=wallViewHeight(w,h),focusHeight=focusViewHeight(w,h),viewHeight=THREE.MathUtils.lerp(wallHeight,focusHeight,p);
     camera.top=viewHeight/2;camera.bottom=-camera.top;camera.right=camera.top*aspect;camera.left=-camera.right;
     const wallTarget=new THREE.Vector3(panX,MAP_CENTER_Y+panY,0),wallPosition=new THREE.Vector3(panX,MAP_CENTER_Y+panY,22);
-    const focusTargetPoint=qingdaoWorld().add(new THREE.Vector3(0,.55,0));
+    const focusTargetPoint=qingdaoWorld();
     const direction=new THREE.Vector3(Math.sin(focusAzimuth)*Math.cos(focusElevation),Math.sin(focusElevation),Math.cos(focusAzimuth)*Math.cos(focusElevation));
     const focusPosition=focusTargetPoint.clone().addScaledVector(direction,20);
     camera.position.lerpVectors(wallPosition,focusPosition,p);
     const target=wallTarget.clone().lerp(focusTargetPoint,p);
     camera.zoom=THREE.MathUtils.lerp(userZoom,focusZoom,p);
     camera.lookAt(target);camera.updateProjectionMatrix();
-    mapRoot.rotation.x=-Math.PI/2*smooth(p);
+    // Hold the wall map upright while the camera pushes in, then lay it flat.
+    const tilt=smooth(clamp((p-.5)/.5,0,1));
+    mapRoot.rotation.x=-Math.PI/2*tilt;
     mapRoot.updateMatrixWorld(true);
     const fade=1-smooth(Math.min(1,p*1.45));
     backdrop.visible=fade>.001;
     wallMaterial.opacity=wallMaterial.userData.baseOpacity*fade;
     lineMaterial.opacity=lineMaterial.userData.baseOpacity*fade;
     model.setFocusMode(p>.16);
-    diorama.root.visible=p>.55;
-    diorama.setRise(riseProgress);
-    markers.visible=p<.035;
-    ringMarker.visible=ringMarker.visible&&p<.035;
+    if(focusTarget===1){markers.visible=false;ringMarker.visible=false;}
+    else{markers.visible=p<.035;ringMarker.visible=ringMarker.visible&&p<.035;}
     if(p>.001)labelsDirty=false;
   }
 
   function fit(){
     const w=container.clientWidth,h=container.clientHeight;if(!w||!h)return;
-    renderer.setSize(w,h);camera.aspect=w/h;applyCamera(w,h);sceneDirty=true;labelsDirty=true;
+    renderer.setSize(w,h);camera.aspect=w/h;applyCamera(w,h);sceneDirty=true;labelsDirty=true;island.fit();
   }
 
   const tap=createTapTracker({distance:7}),raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();
@@ -180,18 +184,34 @@ export function createTravelScene(container,onSelect,onFocusChange=()=>{}){
 
   const resize=new ResizeObserver(fit);resize.observe(container);window.addEventListener('resize',fit);fit();
   renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;
-  let lastLayout=0;
+  function showIsland(){
+    if(islandVisible)return;
+    islandVisible=true;
+    travelPage?.classList.add('travel-island-scene');
+    renderer.domElement.style.opacity='0';
+    island.enter();
+  }
+  function hideIsland(){
+    if(!islandVisible)return;
+    islandVisible=false;
+    travelPage?.classList.remove('travel-island-scene');
+    renderer.domElement.style.opacity='1';
+    island.exit();
+  }
+
   function render(time){
     requestAnimationFrame(render);
     if(!active||document.hidden)return;
     if(focusAnimating){
-      const p=Math.min(1,(time-focusStart)/1100),eased=p*p*(3-2*p);
+      const p=Math.min(1,(time-focusStart)/FOCUS_DURATION),eased=p*p*(3-2*p);
       focusProgress=focusFrom+(focusTarget-focusFrom)*eased;
-      if(p>=1){focusAnimating=false;focusProgress=focusTarget;if(focusTarget===1){riseFrom=riseProgress;riseTarget=1;riseStart=time;riseAnimating=true;}else{focusMode=false;onFocusChange(false);labelsDirty=true;measureLabels=true;markers.visible=true;ringMarker.visible=!!selected;}}
+      if(p>=1){
+        focusAnimating=false;focusProgress=focusTarget;
+        if(focusTarget===1){showIsland();}
+        else{focusMode=false;onFocusChange(false);labelsDirty=true;measureLabels=true;markers.visible=true;ringMarker.visible=!!selected;labels.style.visibility='';labels.style.opacity='';}
+      }
       applyCamera();sceneDirty=true;renderer.shadowMap.needsUpdate=true;
     }
-    if(riseAnimating){const rp=Math.min(1,(time-riseStart)/700),eased=rp*rp*(3-2*rp);riseProgress=riseFrom+(riseTarget-riseFrom)*eased;diorama.setRise(riseProgress);if(rp>=1)riseAnimating=false;sceneDirty=true;}
-    if(focusProgress>.01&&diorama.root.visible){diorama.update(time,camera);sceneDirty=true;}
     if(time-last<30)return;last=time;
     if(sceneDirty){renderer.render(scene,camera);sceneDirty=false;}
     if(labelsDirty&&focusProgress<.01){layoutLabels();labelsDirty=false;}
@@ -199,6 +219,7 @@ export function createTravelScene(container,onSelect,onFocusChange=()=>{}){
   requestAnimationFrame(render);
 
   function layoutLabels(){
+
     const w=container.clientWidth,h=container.clientHeight;if(!w||!h)return;
     camera.updateMatrixWorld(true);
     if(measureLabels){for(const e of labelEntries){e.button.hidden=false;e.button.style.visibility='hidden';}for(const e of labelEntries){e.width=e.button.offsetWidth;e.height=e.button.offsetHeight;}measureLabels=false;}
@@ -239,21 +260,37 @@ export function createTravelScene(container,onSelect,onFocusChange=()=>{}){
   }
   function focusDiorama(){
     if(focusTarget===1&&!focusAnimating)return;
-    focusAzimuth=0;focusElevation=.42;focusZoom=1;orbit=null;riseProgress=0;riseFrom=0;riseTarget=0;riseAnimating=false;diorama.setRise(0);
+    if(focusProgress<.01){
+      hideIsland();
+      travelPage?.classList.remove('travel-island-scene');
+      renderer.domElement.style.opacity='1';
+    }
+    focusAzimuth=0;focusElevation=.42;focusZoom=1;orbit=null;
+    markers.visible=false;ringMarker.visible=false;labels.style.visibility='hidden';labels.style.opacity='0';
     focusFrom=focusProgress;focusTarget=1;focusStart=performance.now();focusAnimating=true;focusMode=true;onFocusChange(true);
     renderer.shadowMap.needsUpdate=true;sceneDirty=true;
   }
   function exitDiorama(){
     if(focusTarget===0&&!focusAnimating)return;
-    focusFrom=focusProgress;focusTarget=0;focusStart=performance.now();focusAnimating=true;focusMode=false;orbit=null;riseFrom=riseProgress;riseTarget=0;riseStart=performance.now();riseAnimating=true;
+    hideIsland();
+    focusFrom=focusProgress;focusTarget=0;focusStart=performance.now();focusAnimating=true;focusMode=false;orbit=null;
     renderer.shadowMap.needsUpdate=true;sceneDirty=true;
   }
-  function zoom(factor){if(focusProgress>.01)return;userZoom=clamp(userZoom*factor,.65,2.5);applyCamera();sceneDirty=true;labelsDirty=true;}
-  function reset(){if(focusProgress>.01){focusAzimuth=0;focusElevation=.42;focusZoom=1;applyCamera();sceneDirty=true;return;}userZoom=1;panX=panY=0;applyCamera();sceneDirty=true;labelsDirty=true;}
+  function zoom(factor){if(focusProgress>.01){island.zoom(factor);return;}userZoom=clamp(userZoom*factor,.65,2.5);applyCamera();sceneDirty=true;labelsDirty=true;}
+  function reset(){if(focusProgress>.01){island.resetView();return;}userZoom=1;panX=panY=0;applyCamera();sceneDirty=true;labelsDirty=true;}
   function setActive(value){
     active=value;
-    if(value){focusProgress=0;focusFrom=0;focusTarget=0;focusAnimating=false;focusMode=false;focusAzimuth=0;focusElevation=.42;focusZoom=1;orbit=null;riseProgress=0;riseFrom=0;riseTarget=0;riseAnimating=false;diorama.setRise(0);mapRoot.rotation.x=0;backdrop.visible=true;wallMaterial.opacity=1;lineMaterial.opacity=.55;diorama.root.visible=false;model.setFocusMode(false);markers.visible=true;ringMarker.visible=!!selected;userZoom=1;panX=panY=0;fit();onFocusChange(false);sceneDirty=true;labelsDirty=true;measureLabels=true;}
-    else{tap.reset();panning=null;orbit=null;pointers.clear();pinch=null;onFocusChange(false);}
+    if(value){
+      focusProgress=0;focusFrom=0;focusTarget=0;focusAnimating=false;focusMode=false;focusAzimuth=0;focusElevation=.42;focusZoom=1;orbit=null;
+      mapRoot.rotation.x=0;backdrop.visible=true;wallMaterial.opacity=1;lineMaterial.opacity=.55;model.setFocusMode(false);markers.visible=true;ringMarker.visible=!!selected;labels.style.visibility='';labels.style.opacity='';
+      userZoom=1;panX=panY=0;
+      islandVisible=false;island.setActive(false);travelPage?.classList.remove('travel-island-scene');renderer.domElement.style.opacity='1';
+      fit();onFocusChange(false);sceneDirty=true;labelsDirty=true;measureLabels=true;
+    }else{
+      hideIsland();island.setActive(false);travelPage?.classList.remove('travel-island-scene');renderer.domElement.style.opacity='1';
+      tap.reset();panning=null;orbit=null;pointers.clear();pinch=null;onFocusChange(false);
+    }
   }
   return {setRecords,setPreview,select,setActive,fit,reset,zoom,mapBounds,focusDiorama,exitDiorama,isFocused:()=>focusProgress>.01||focusMode,debug:()=>({focusProgress,focusTarget,zoom:userZoom,panX,panY,focusAzimuth,focusElevation,focusZoom})};
+
 }

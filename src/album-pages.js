@@ -115,28 +115,28 @@ export async function renderAlbumPage(page,{cover=false,pageNumber=1,years='',co
     if(photos[index])hits.push({rect:[x,y,w,h],index:page.photoStart+index});
   }
   function slot(i,options={}){const [x,y,w,h,polaroid]=albumPhotoSlots(template)[i];photoSlot(i,[x,y,w,h],{polaroid,...options});}
-  if(template==='cover')box(430,0,430,622,'#899c77',[0,21,21,0]);else box(0,0,860,622,template==='anniversary'?'#fff6ec':'#fffaf0',21);
+  if(template==='cover')box(430,0,430,622,'#7fa3c3',[0,21,21,0]);else box(0,0,860,622,template==='anniversary'?'#fff6ec':'#fffaf0',21);
   if(template!=='cover'){
     text(r.date.replaceAll('-','.'),46,34,13,'#9d9c8d',false);text(pageNumber.toString().padStart(2,'0'),815,591,12,'#a6a393',false,'right');
   }
   if(template==='cover'){
-    box(430,0,10,622,'#eee8d9');box(441,0,2,622,'#bac6a8');box(447,0,1,622,'#a7b896');text('little us.',491,91,43,'#fff9e9');text('相册',494,149,19,'#e0e5cf');text(years,494,570,14,'#e0e5cf',false);
+    box(430,0,10,622,'#eee8d9');box(441,0,2,622,'#a9c6dd');box(447,0,1,622,'#8fb0cb');text('little us.',491,91,43,'#fff9e9');text('相册',494,149,19,'#f3ead8');text(years,494,570,14,'#f3ead8',false);
     const cp=(coverPhoto?await albumImage(coverPhoto.src):null)||defaults[3];
     box(491,216,304,322,'#fffdf2',3);const crop=albumCropRect(cp.naturalWidth,cp.naturalHeight,280,270,coverPhoto?.crop);ctx.drawImage(cp,crop.x,crop.y,crop.width,crop.height,503,228,280,270);
   }else if(template==='daily'){
     title(44,88,340,30,'#535e4c',108);
-    slot(0,{kind:'home'});slot(1,{kind:'flowers'});slot(2,{kind:'street'});tape(154,207,84,'#d9ceb4',0);tape(584,96,75,'#cbd3bc',0);lines(page.lines,47,512,19,24);
+    slot(0,{kind:'home'});slot(1,{kind:'flowers'});slot(2,{kind:'street'});tape(154,207,84,'#d9ceb4',0);tape(584,96,75,'#a9c6dd',0);lines(page.lines,47,512,19,24);
   }else if(template==='travel'){
     slot(0,{kind:'hills'});title(466,90,349,30,'#535e4c',105);lines(page.lines,467,205,20,25);slot(1,{kind:'lake'});
   }else if(template==='anniversary'){
     title(48,90,340,32,'#655c50',116);
-    slot(0,{kind:'lake'});slot(1,{kind:'home'});tape(168,212,84,'#dfcbb4',0);tape(599,203,79,'#cbd1b9',0);
+    slot(0,{kind:'lake'});slot(1,{kind:'home'});tape(168,212,84,'#dfcbb4',0);tape(599,203,79,'#b7d0e2',0);
     lines(page.lines.slice(0,2),47,539,23,28,'#8d7968');lines(page.lines.slice(2),477,539,23,28,'#8d7968');
   }else if(template==='film'){
     title(44,85,342,29,'#535e4c',73);const frames=albumPhotoSlots(template);for(let i=0;i<6;i++){const [x,y,w,h]=frames[i];box(x,y,w,h,'#5c664f',2);photoSlot(i,[x+8,y+8,w-16,h-31],{kind:['street','home','flowers','hills','lake','snow'][i]});text(String(page.photoStart+i+1).padStart(2,'0'),x+10,y+h-17,10,'#e4e7d4',false);}
     lines(page.lines.slice(0,1),45,580,18,22);lines(page.lines.slice(1),479,580,18,22);
   }else if(template==='letter'){
-    title(44,88,341,29,'#535e4c',106);for(let y=228;y<584;y+=29){ctx.strokeStyle='#eae4d6';ctx.beginPath();ctx.moveTo(45,y);ctx.lineTo(390,y);ctx.stroke();}lines(page.lines,47,201,21,29);slot(0,{kind:'flowers'});tape(599,207,80,'#cbd1b9',0);
+    title(44,88,341,29,'#535e4c',106);for(let y=228;y<584;y+=29){ctx.strokeStyle='#eae4d6';ctx.beginPath();ctx.moveTo(45,y);ctx.lineTo(390,y);ctx.stroke();}lines(page.lines,47,201,21,29);slot(0,{kind:'flowers'});tape(599,207,80,'#b7d0e2',0);
   }else if(template==='large'){
     slot(0,{kind:'snow'});title(49,148,338,34,'#535e4c',147);lines(page.lines,49,339,22,29);
   }

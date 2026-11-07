@@ -111,8 +111,12 @@ export function createPageTransition({room,home,hideHome}){
         if(!lens||operation!==op||!isCurrent()){if(operation===op)cancel();return false;}
       }
       document.body.dataset.transitionPhase='arrive';
-      const arrived=await animate(alignedMap?400:mapMatch?400:680,p=>{
-        const ease=1-Math.pow(1-p,3),fade=alignedMap||mapMatch?p*p*(3-2*p):Math.min(1,ease/0.8);
+      // The map page is already matched to the framed map underneath; show it
+      // atomically instead of letting foreground furniture show through a
+      // half-transparent page.
+      const instantMap=alignedMap&&!reduced.matches;
+      const arrived=await animate(instantMap?1:(alignedMap?400:mapMatch?400:680),p=>{
+        const ease=1-Math.pow(1-p,3),fade=instantMap?1:(alignedMap||mapMatch?p*p*(3-2*p):Math.min(1,ease/0.8));
         page.style.opacity=String(fade);home.style.opacity=alignedMap||mapMatch?'':String(1-fade);
         page.style.transform=reduced.matches||alignedMap||mapMatch?'':`scale(${1+.045*(1-ease)})`;
       },token);

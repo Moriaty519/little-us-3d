@@ -13,7 +13,7 @@ const sceneURL=encode('export const createTravelScene=()=>globalThis.createEntry
 const uiURL=encode('export const confirmAction=async()=>true,modalOpen=()=>false;');
 const storageURL=encode('export const CITY_BY_ID=new Map(),cityName=()=>"",findCities=()=>[],journeyLoad=async()=>[],journeySave=async()=>{},journeyRemove=async()=>{},validJourneys=x=>x;');
 const qingdaoURL=encode("export const QINGDAO_ID='370200';");
-const source=(await fs.readFile(new URL('../src/travel-app.js',import.meta.url),'utf8')).replace("'./travel-scene.js'",`'${sceneURL}'`).replace("'./ui.js'",`'${uiURL}'`).replace("'./travel-storage.js'",`'${storageURL}'`).replace("'./qingdao-diorama.js'",`'${qingdaoURL}'`);
+const source=(await fs.readFile(new URL('../src/travel-app.js',import.meta.url),'utf8')).replace("'./travel-scene.js'",`'${sceneURL}'`).replace("'./ui.js'",`'${uiURL}'`).replace("'./travel-storage.js'",`'${storageURL}'`).replace("'./qingdao-island.js'",`'${qingdaoURL}'`);
 const {createTravelApp}=await import(encode(source));
 const app=createTravelApp({onOpen(){},onClose(){}});await app.ready;
 app.open(false);assert.equal(zoom,1);assert.equal(resetCount,1);

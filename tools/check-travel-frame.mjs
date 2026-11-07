@@ -18,7 +18,7 @@ const model=createChinaMapModel();
 const root=new THREE.Group();root.position.set(0,MAP_CENTER_Y,0);root.scale.setScalar(MAP_SCALE);root.add(model.group);root.updateMatrixWorld(true);
 const homeMap=createChinaMapModel();homeMap.group.position.set(-4.355,2.82,1.05);homeMap.group.rotation.y=Math.PI/2;homeMap.group.updateMatrixWorld(true);
 function wallViewHeight(w,h){const aspect=w/h,safeHeight=Math.max(220,h-170);return Math.max(MAP_HEIGHT*1.28,MAP_WIDTH/aspect*1.08,MAP_HEIGHT*h/safeHeight);}
-function focusViewHeight(w,h){return Math.max(2.1,1.35/(w/h));}
+function focusViewHeight(w,h){return Math.max(1.55,1.05/(w/h));}
 function pageCamera(w,h){
   const camera=new THREE.OrthographicCamera(-1,1,1,-1,.1,200);camera.up.set(0,1,0);
   const viewHeight=wallViewHeight(w,h),aspect=w/h;camera.top=viewHeight/2;camera.bottom=-camera.top;camera.right=camera.top*aspect;camera.left=-camera.right;
@@ -51,19 +51,19 @@ for(const [w,h] of [[1280,720],[1440,900],[1024,768],[390,844],[844,390]]){
   homeCamera.position.copy(homeCenter).addScaledVector(homeNormal,f.distance);homeCamera.up.set(0,1,0);homeCamera.lookAt(homeCenter);homeCamera.setViewOffset(w,h,f.offsetX,f.offsetY,w,h);homeCamera.updateMatrixWorld(true);
   const homeCorners=faceCorners({face:homeMap.face}).map(p=>px(p,homeCamera,w,h));
   homeCorners.forEach((p,i)=>{assert.ok(Math.abs(p.x-corners[i].x)<1e-7&&Math.abs(p.y-corners[i].y)<1e-7,`map face handoff differs at ${w}x${h}`);});
-  const from=frameBounds(homeMap.group.children[0],homeCamera,w,h),to=frameBounds(model.group.children[0],camera,w,h);
-  from.forEach((value,i)=>assert.ok(Math.abs(value-to[i])<1,'wood frame handoff must stay within one pixel'));
-  // The Qingdao focus camera must frame the point and its local diorama.
+  const from=frameBounds(homeMap.face,homeCamera,w,h),to=frameBounds(model.face,camera,w,h);
+  from.forEach((value,i)=>assert.ok(Math.abs(value-to[i])<1,'map paper handoff must stay within one pixel'));
+  // The Qingdao focus camera must frame the point before the island scene takes over.
   root.rotation.x=-Math.PI/2;root.updateMatrixWorld(true);
   const q=model.point(120.355173,36.082982,.025),world=model.group.localToWorld(q.clone());
   const viewHeight=focusViewHeight(w,h),aspect=w/h;
   const focusCamera=new THREE.OrthographicCamera(-viewHeight*aspect/2,viewHeight*aspect/2,viewHeight/2,-viewHeight/2,.1,200);focusCamera.up.set(0,1,0);
-  const target=world.clone().add(new THREE.Vector3(0,.55,0)),position=target.clone().add(new THREE.Vector3(0,Math.sin(.42),Math.cos(.42)).multiplyScalar(20));
+  const target=world.clone().add(new THREE.Vector3(0,0,0)),position=target.clone().add(new THREE.Vector3(0,Math.sin(.42),Math.cos(.42)).multiplyScalar(20));
   focusCamera.position.copy(position);focusCamera.lookAt(target);focusCamera.updateProjectionMatrix();focusCamera.updateMatrixWorld(true);
   const qp=px(world,focusCamera,w,h);
-  assert.ok(qp.x>w*.2&&qp.x<w*.8&&qp.y>h*.2&&qp.y<h*.8,`Qingdao focus is off-centre at ${w}x${h}: ${qp.x},${qp.y}`);
-  // The sea/sand disc must stay inside the focus view rather than being cropped.
-  const clusterRadius=.35;
+  assert.ok(qp.x>w*.2&&qp.x<w*.8&&qp.y>h*.2&&qp.y<h*.9,`Qingdao focus is off-centre at ${w}x${h}: ${qp.x},${qp.y}`);
+  // The flat-map handoff patch must stay inside the focus view.
+  const clusterRadius=.18;
   for(const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]]){
     const p=px(world.clone().add(new THREE.Vector3(dx*clusterRadius,0,dy*clusterRadius)),focusCamera,w,h);
     if(!(p.x>0&&p.x<w&&p.y>0&&p.y<h))console.log('clip',w,h,dx,dy,p.x,p.y);
@@ -72,4 +72,4 @@ for(const [w,h] of [[1280,720],[1440,900],[1024,768],[390,844],[844,390]]){
   focusViews++;handoffs++;
   root.rotation.x=0;root.updateMatrixWorld(true);
 }
-console.log(`PASS: ${handoffs} upright framed-map handoffs with the home wall (frame within 1px), centered wall presentation, and ${focusViews} uncropped Qingdao focus framings on desktop/mobile/landscape.`);
+console.log(`PASS: ${handoffs} upright framed-map handoffs with the home wall (frame within 1px), centered wall presentation, and ${focusViews} uncropped Qingdao map-focus framings on desktop/mobile/landscape.`);

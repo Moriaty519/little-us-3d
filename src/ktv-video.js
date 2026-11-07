@@ -13,21 +13,21 @@ export function createKtvVideo(renderer,onChange){
   let source=null,ready=false,raf=0,generation=0;
   function changed(){texture.needsUpdate=true;onChange?.();}
   function placeholder(){
-    ctx.fillStyle='#e8e1cf';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#f3ecdf';ctx.fillRect(0,0,W,H);
     const gradient=ctx.createRadialGradient(W/2,H/2,12,W/2,H/2,W*.62);
-    gradient.addColorStop(0,'#f3eddd');gradient.addColorStop(1,'#ddd4bd');ctx.fillStyle=gradient;ctx.fillRect(0,0,W,H);
-    ctx.fillStyle='#9aa98a';ctx.beginPath();
+    gradient.addColorStop(0,'#fffaf0');gradient.addColorStop(1,'#e8ddc9');ctx.fillStyle=gradient;ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#7fa3c3';ctx.beginPath();
     const s=42;ctx.moveTo(W/2-s*.42,H/2-s*.62);ctx.lineTo(W/2+s*.62,H/2);ctx.lineTo(W/2-s*.42,H/2+s*.62);ctx.closePath();ctx.fill();
     changed();
   }
   function paint(){
     ctx.clearRect(0,0,W,H);
     if(!ready||!video.videoWidth){placeholder();return;}
-    ctx.fillStyle='#20271e';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#1e242b';ctx.fillRect(0,0,W,H);
     const cover=Math.max(W/video.videoWidth,H/video.videoHeight);
     ctx.save();ctx.filter='blur(30px)';ctx.globalAlpha=.3;
     ctx.drawImage(video,(W-video.videoWidth*cover)/2,(H-video.videoHeight*cover)/2,video.videoWidth*cover,video.videoHeight*cover);ctx.restore();
-    ctx.fillStyle='#1b221a6b';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#1a20276b';ctx.fillRect(0,0,W,H);
     const r=cinemaContain(video.videoWidth,video.videoHeight,W,H);ctx.drawImage(video,r.x,r.y,r.width,r.height);
     changed();
   }

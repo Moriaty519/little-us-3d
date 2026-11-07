@@ -198,6 +198,8 @@ document.addEventListener('keydown',event=>{
   if(event.key==='Escape'){pageTransition.cancel();history.replaceState(null,'',location.pathname+location.search);routePage();}
 },true);
 openingApp=createOpening({room:roomView,roomContainer:$('scene'),onComplete:()=>{routePage();birdTour?.showCue();}});
+
+
 $('opening-replay').onclick=()=>{if(importing||memorySaving||modalOpen()||!$('memory-drawer').hidden)return;birdTour?.cancel();$('object-panel').hidden=true;roomView?.selectObject(null);openingApp.start();};
 
 // Keep auxiliary menus out of the way once an action has been selected.

@@ -18,7 +18,7 @@ export function createBirdTour({room,home}){
     const a=room.birdTourAnchor(state==='stop'?stop?.id:null,w,h);if(!a)return;
     const x=Math.max(22,Math.min(w-22,a.bird.x)),y=Math.max(90,Math.min(h-100,a.bird.y));
     if(state==='cue'){
-      const cw=cue.offsetWidth,ch=cue.offsetHeight;cue.style.left=Math.max(12,Math.min(w-cw-12,x-cw/2))+'px';cue.style.top=Math.max(95,y-ch-18)+'px';
+      const cw=cue.offsetWidth,ch=cue.offsetHeight;cue.style.left=Math.max(12,Math.min(w-cw-12,x-cw/2))+'px';cue.style.top=Math.max(95,y-ch-18)+'px';cue.style.visibility='visible';
     }else{
       const pw=panel.offsetWidth,ph=panel.offsetHeight;
       let px,py;
@@ -28,13 +28,13 @@ export function createBirdTour({room,home}){
         px=right+pw<=w-28?right:left>=28?left:Math.max(28,Math.min(w-pw-28,x+45));
         py=Math.max(100,Math.min(h-ph-96,y-ph/2));
       }
-      panel.style.left=px+'px';panel.style.top=py+'px';
+      panel.style.left=px+'px';panel.style.top=py+'px';panel.style.visibility='visible';
     }
     frame=requestAnimationFrame(layout);
   }
   function animateLayout(){if(!frame)frame=requestAnimationFrame(layout);}
   function setNextLabel(label){next.textContent=label;next.setAttribute('aria-label',label==='完成'?'完成导览':'下一步');}
-  function showCue(){if(state!=='hidden'||!room||home.hidden)return;state='cue';cue.hidden=false;home.classList.add('bird-tour-visible');room.birdTourCue(true);animateLayout();}
+  function showCue(){if(state!=='hidden'||!room||home.hidden)return;state='cue';cue.style.visibility='hidden';cue.hidden=false;home.classList.add('bird-tour-visible');room.birdTourCue(true);animateLayout();}
   function dismissCue(){
     if(state!=='cue')return;
     ++token;state='hidden';index=-1;cancelAnimationFrame(frame);frame=0;
@@ -53,6 +53,7 @@ export function createBirdTour({room,home}){
     const started=room.flyBirdTour(destination,()=>{
       if(current!==token)return;
       if(skipTour){cancel({focus:true});return;}
+      if(panel.hidden)panel.style.visibility='hidden';
       panel.hidden=false;next.disabled=false;
       if(destination==='home'){
         state='done';panel.dataset.state=state;title.textContent='小屋交给你啦';copy.textContent='我回到小木屋了。现在可以自由点击家具，探索我们的故事。点完成结束导览，也可以回到上一步。';progress.textContent='导览完成';prev.disabled=false;setNextLabel('完成');

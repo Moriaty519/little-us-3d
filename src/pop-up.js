@@ -18,8 +18,8 @@ export function popUpPose(progress){
 export function createPopUp({scene,room,leftWall,backWall,furniture,floor,texture}){
   const paper=new THREE.Group();paper.name='Unfolding envelope';paper.rotation.y=Math.PI;scene.add(paper);
   const paperMat=color=>new THREE.MeshStandardMaterial({color,roughness:1,side:THREE.DoubleSide});
-  const outer=paperMat('#c6cfb2'),inner=paperMat('#f6efdb');
-  const crease=paperMat('#b1ba9c');
+  const outer=paperMat('#8fb2cf'),inner=paperMat('#dceaf5');
+  const crease=paperMat('#6e93b2');
   function sheet(parent,points,mat){
     const shape=new THREE.Shape();points.forEach(([x,z],i)=>i?shape.lineTo(x,-z):shape.moveTo(x,-z));shape.closePath();
     const geo=new THREE.ExtrudeGeometry(shape,{depth:.035,bevelEnabled:false});geo.rotateX(-Math.PI/2);
@@ -32,18 +32,17 @@ export function createPopUp({scene,room,leftWall,backWall,furniture,floor,textur
   const left=flap('Envelope left crease',-5.3,0,[[0,-4.25],[0,4.25],[5.65,0]],outer,.045);
   const right=flap('Envelope right crease',5.3,0,[[0,4.25],[0,-4.25],[-5.65,0]],outer,.065);
   const front=flap('Envelope lower crease',0,4.25,[[5.3,0],[-5.3,0],[0,-4.85]],inner,.025);
-  function flower(ctx,x,z,size=1){
-    ctx.save();ctx.translate(x,z);ctx.scale(size,size);ctx.fillStyle='#f9eedc';
-    for(let i=0;i<5;i++){const angle=i*Math.PI*2/5;ctx.beginPath();ctx.ellipse(Math.cos(angle)*.105,Math.sin(angle)*.105,.105,.065,angle,0,Math.PI*2);ctx.fill();}
-    ctx.fillStyle='#ccb57c';ctx.beginPath();ctx.arc(0,0,.05,0,Math.PI*2);ctx.fill();ctx.restore();
-  }
-  function heart(ctx,x,z,size,color='#d2a09a'){
-    ctx.save();ctx.translate(x,z);ctx.scale(size,size);ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(0,.7);ctx.bezierCurveTo(-1,-.05,-.65,-.75,0,-.3);ctx.bezierCurveTo(.65,-.75,1,-.05,0,.7);ctx.fill();ctx.restore();
-  }
-  function sprig(ctx,x,z,size,angle=0){
-    ctx.save();ctx.translate(x,z);ctx.rotate(angle);ctx.scale(size,size);ctx.strokeStyle='#869973';ctx.lineWidth=.024;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,0);ctx.bezierCurveTo(.12,-.28,.3,-.59,.6,-.94);ctx.stroke();
-    for(const [lx,lz,a] of [[.08,-.2,-.65],[.22,-.37,.4],[.3,-.53,-.7],[.43,-.7,.4]]){ctx.fillStyle=lz<-.5?'#a0af8b':'#8e9e7d';ctx.beginPath();ctx.ellipse(lx,lz,.135,.052,a,0,Math.PI*2);ctx.fill();}
-    flower(ctx,.59,-.93,1.25);heart(ctx,-.15,-.5,.12);ctx.restore();
+  function snowflake(ctx,x,z,size,color='#fbfdff'){
+    ctx.save();ctx.translate(x,z);ctx.scale(size,size);ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=.07;ctx.lineCap='round';
+    for(let i=0;i<6;i++){
+      ctx.save();ctx.rotate(i*Math.PI/3);
+      ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-.78);ctx.stroke();
+      for(const [y,reach] of [[-.25,.2],[-.45,.16],[-.63,.11]]){
+        ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(-reach,y-reach*.9);ctx.moveTo(0,y);ctx.lineTo(reach,y-reach*.9);ctx.stroke();
+      }
+      ctx.restore();
+    }
+    ctx.beginPath();ctx.arc(0,0,.075,0,Math.PI*2);ctx.fill();ctx.restore();
   }
   function decorate(hinge,draw){
     const points=hinge.userData.outline,minX=Math.min(...points.map(p=>p[0])),maxX=Math.max(...points.map(p=>p[0])),minZ=Math.min(...points.map(p=>p[1])),maxZ=Math.max(...points.map(p=>p[1]));
@@ -51,32 +50,32 @@ export function createPopUp({scene,room,leftWall,backWall,furniture,floor,textur
     const geometry=new THREE.ShapeGeometry(shape);geometry.rotateX(-Math.PI/2);const positions=geometry.attributes.position,uv=geometry.attributes.uv;
     for(let i=0;i<positions.count;i++)uv.setXY(i,(positions.getX(i)-minX)/(maxX-minX),1-(positions.getZ(i)-minZ)/(maxZ-minZ));
     const map=texture((ctx,W,H)=>{ctx.clearRect(0,0,W,H);ctx.setTransform(W/(maxX-minX),0,0,H/(maxZ-minZ),-minX*W/(maxX-minX),-minZ*H/(maxZ-minZ));draw(ctx);},1024,768);
-    const ink=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({map,transparent:true,depthWrite:false,toneMapped:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}));ink.name='Exterior floral envelope print';ink.position.y=.042;hinge.add(ink);
+    const ink=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({map,transparent:true,depthWrite:false,toneMapped:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}));ink.name='Exterior envelope print';ink.position.y=.042;hinge.add(ink);
   }
   function stitch(ctx,points,color){ctx.strokeStyle=color;ctx.lineWidth=.019;ctx.setLineDash([.07,.07]);ctx.beginPath();points.forEach(([x,z],i)=>i?ctx.lineTo(x,z):ctx.moveTo(x,z));ctx.closePath();ctx.stroke();ctx.setLineDash([]);}
-  decorate(front,ctx=>{stitch(ctx,[[4.75,-.19],[-4.75,-.19],[0,-4.35]],'#c6cbb5');sprig(ctx,-3.8,-.45,.75,.4);ctx.save();ctx.scale(-1,1);sprig(ctx,-3.8,-.45,.75,.4);ctx.restore();heart(ctx,-2.25,-1.2,.11);heart(ctx,2.25,-1.2,.11);});
-  const sideArt=ctx=>{stitch(ctx,[[.22,-3.8],[.22,3.8],[5.08,0]],'#edf0db');sprig(ctx,.55,3.2,1.15,-.2);flower(ctx,1.55,1.7,.8);flower(ctx,2.65,.1,.55);heart(ctx,.67,.35,.12);for(const [x,z] of [[.48,1.6],[1.7,2.1],[2.7,-.4]]){ctx.fillStyle='#eef0dd';ctx.beginPath();ctx.arc(x,z,.026,0,Math.PI*2);ctx.fill();}};
+  decorate(front,ctx=>{stitch(ctx,[[4.75,-.19],[-4.75,-.19],[0,-4.35]],'#c3d0dc');});
+  const sideArt=ctx=>{stitch(ctx,[[.22,-3.8],[.22,3.8],[5.08,0]],'#eef4f8');};
   decorate(left,sideArt);decorate(right,ctx=>{ctx.scale(-1,1);sideArt(ctx);});
-  decorate(back,ctx=>{stitch(ctx,[[-4.7,.2],[4.7,.2],[0,4.36]],'#edf0db');heart(ctx,-.32,.65,.18);heart(ctx,.25,.83,.12,'#ecebd3');flower(ctx,-1.65,.63,.65);flower(ctx,1.6,.65,.65);});
+  decorate(back,ctx=>{stitch(ctx,[[-4.7,.2],[4.7,.2],[0,4.36]],'#eef4f8');});
   // Fine scored lines remain visible when the letter is fully spread.
   for(const [x,z,w,d] of [[0,-4.25,10.6,.018],[0,4.25,10.6,.018],[-5.3,0,.018,8.5],[5.3,0,.018,8.5]]){
     const line=new THREE.Mesh(new THREE.BoxGeometry(w,.006,d),crease);line.position.set(x,.04,z);paper.add(line);
   }
-  function print(parent,text,x,z,w,h,color){
-    const map=texture((ctx,W,H)=>{ctx.clearRect(0,0,W,H);ctx.fillStyle=color;ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='40px "Songti SC",serif';ctx.fillText(text,W/2,H/2);},512,128);
+  function print(parent,text,x,z,w,h,color,font='40px "Songti SC",serif'){
+    const map=texture((ctx,W,H)=>{ctx.clearRect(0,0,W,H);ctx.fillStyle=color;ctx.textAlign='center';ctx.textBaseline='middle';ctx.font=font;ctx.letterSpacing='1px';ctx.fillText(text,W/2,H/2);},512,128);
     const ink=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map,transparent:true,depthWrite:false,toneMapped:false,side:THREE.DoubleSide}));
     ink.position.set(x,.046,z);ink.rotation.x=-Math.PI/2;parent.add(ink);
     return ink;
   }
-  const address=print(front,'致 我 们',0,-1.25,3.8,.9,'#6c7b5d');
+  const address=print(front,'anniversary',0,-1.25,4.2,1.05,'#4f6d8f','italic 58px Baskerville,"Times New Roman",serif');
   address.rotation.z=Math.PI;
-  const insideAddress=print(front,'a little place for us',0,-2.25,3,.38,'#9c9f83');
+  const insideAddress=print(front,'a little place for us',0,-2.25,3,.38,'#93a4b5');
   // Print on both faces of the lower flap rather than mirror the inside lettering.
   insideAddress.rotation.x=Math.PI/2;insideAddress.rotation.z=Math.PI;insideAddress.position.y=-.008;
   const seal=new THREE.Group();seal.position.set(0,1.14,.35);paper.add(seal);
-  const wax=new THREE.Mesh(new THREE.CylinderGeometry(.48,.5,.1,48),paperMat('#c49a90'));seal.add(wax);
-  const rim=new THREE.Mesh(new THREE.TorusGeometry(.37,.012,6,48),paperMat('#eed2bd'));rim.rotation.x=-Math.PI/2;rim.position.y=.057;seal.add(rim);
-  const sealMap=texture((ctx,W,H)=>{ctx.clearRect(0,0,W,H);ctx.translate(W/2,H/2);ctx.scale(W*.3,H*.3);heart(ctx,0,-.08,1,'#fff0da');},256,256);
+  const wax=new THREE.Mesh(new THREE.CylinderGeometry(.48,.5,.1,48),paperMat('#6088aa'));seal.add(wax);
+  const rim=new THREE.Mesh(new THREE.TorusGeometry(.37,.012,6,48),paperMat('#d8e7f2'));rim.rotation.x=-Math.PI/2;rim.position.y=.057;seal.add(rim);
+  const sealMap=texture((ctx,W,H)=>{ctx.clearRect(0,0,W,H);ctx.translate(W/2,H/2);ctx.scale(W*.3,H*.3);snowflake(ctx,0,0,1.2,'#fbfdff');},256,256);
   const sealMark=new THREE.Mesh(new THREE.PlaneGeometry(.53,.53),new THREE.MeshBasicMaterial({map:sealMap,transparent:true,depthWrite:false,toneMapped:false}));sealMark.rotation.x=-Math.PI/2;sealMark.rotation.z=Math.PI;sealMark.position.y=.063;seal.add(sealMark);
 
   function mount(nodes,position,name){

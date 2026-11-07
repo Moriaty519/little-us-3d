@@ -1,7 +1,7 @@
 import { createTravelScene } from './travel-scene.js';
 import { confirmAction,modalOpen } from './ui.js';
 import { CITY_BY_ID, cityName, findCities, journeyLoad, journeySave, journeyRemove, validJourneys } from './travel-storage.js';
-import { QINGDAO_ID } from './qingdao-diorama.js';
+import { QINGDAO_ID } from './qingdao-island.js';
 
 export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
   const el=id=>document.getElementById(id),page=el('travel-page'),sidebar=el('travel-sidebar'),form=el('journey-form'),overlay=el('travel-drawer-overlay'),focusBack=el('travel-focus-back');
