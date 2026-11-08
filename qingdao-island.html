@@ -58101,7 +58101,7 @@ function createQingdaoIsland(container){
     }
     // Nudge the whole yacht toward the shore and the initial camera side.
     for(const child of root.children){
-      if(child.name.indexOf('QD_Yacht')===0){child.position.x+=2.0;child.position.z+=2.0;}
+      if(child.name.indexOf('QD_Yacht')===0){child.position.x+=2.0;child.position.z+=2.0;child.position.y-=.22;}
     }
 
     plan=[
