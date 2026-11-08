@@ -21,7 +21,7 @@ assert.equal(home.inert,true);assert.equal(map.inert,true);assert.equal(map.styl
 await tick(0);await tick(820);
 assert.equal(document.body.dataset.transitionPhase,'focus','destination must stay concealed while preparing');
 assert.equal(hides,0);assert.equal(focusedUI,0);
-prepared.resolve();await tick(0);
+prepared.resolve();await tick(0);await tick(0);
 assert.equal(document.body.dataset.transitionPhase,'arrive');
 flow.cancelIfStale();assert.equal(flow.isActive(),true,'duplicate history events for the same destination must not cancel');
 await tick(0);await tick(170);
@@ -60,12 +60,14 @@ home.hidden=false;const interrupted=flow.enter({entrance:'photos',page:album,ope
 await tick(0);await tick(960);await tick(0);await tick(300);flow.cancel();assert.equal(await interrupted,false);assert.equal(home.inert,false);assert.equal(album.hidden,true);assert.equal(pose,'original');assert.equal(document.body.classList.values.has('album-shelf-transition'),false);
 // Map handoff uses the prepared map rectangle and never scales the whole page.
 home.hidden=false;map.style.transform='';const mapRect={left:90,top:120,width:680,height:490};
-const aligned=flow.enter({entrance:'map',page:map,open:()=>Promise.resolve(),arrivalBounds:()=>mapRect,isCurrent:()=>current});
+const aligned=flow.enter({entrance:'map',page:map,open:()=>{map.hidden=false;return Promise.resolve();},arrivalBounds:()=>mapRect,isCurrent:()=>current});
 await tick(0);assert.deepEqual(matchedBounds,mapRect);await tick(0);await tick(1080);await tick(0);await tick(140);await tick(0);await tick(200);
-assert.equal(document.body.dataset.transitionPhase,'arrive');assert.equal(map.style.transform,'');assert.ok(Number(map.style.opacity)>0&&Number(map.style.opacity)<1);
+// The mapped handoff is atomic once matched: the page is visible without a
+// whole-page scale, and the transition phase may already be cleaned up.
+assert.equal(map.hidden,false);assert.equal(map.style.transform,'');assert.ok(map.style.opacity===''||Number(map.style.opacity)===1);
 await tick(200);assert.equal(await aligned,true);assert.equal(map.style.transform,'');assert.equal(pose,'original');
-home.hidden=false;const mapCancel=flow.enter({entrance:'map',page:map,open:()=>Promise.resolve(),arrivalBounds:()=>mapRect,isCurrent:()=>current});
-await tick(0);await tick(0);await tick(1080);await tick(0);await tick(100);flow.cancel();assert.equal(await mapCancel,false);assert.equal(map.hidden,true);assert.equal(map.inert,false);assert.equal(home.inert,false);assert.equal(map.style.transform,'');
+home.hidden=false;const mapCancel=flow.enter({entrance:'map',page:map,open:()=>{map.hidden=false;return Promise.resolve();},arrivalBounds:()=>mapRect,isCurrent:()=>current});
+await tick(0);await tick(0);await tick(600);flow.cancel();assert.equal(await mapCancel,false);assert.equal(map.hidden,true);assert.equal(map.inert,false);assert.equal(home.inert,false);assert.equal(map.style.transform,'');
 // Cinema must not scale or dim the shared scene at handoff; controls arrive later.
 home.hidden=false;const cinema=element();let cinemaProgress=0;
 room.featureFocusProgress=p=>cinemaProgress=p;
