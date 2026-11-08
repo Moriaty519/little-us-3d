@@ -61021,8 +61021,10 @@ function createRoom(container, onSelect, {projection=false}={}) {
     for(const x of [-.405,.405])box(door,x,y,.066,.035,h,.026,'#fffdf8',.006);
     for(const dy of [-h/2,h/2])box(door,0,y+dy,.066,.845,.035,.026,'#fffdf8',.006);
   }
-  const knobPlate=cyl(door,.413,1.25,.102,.044,.044,.023,'#6f90ad',20);knobPlate.rotation.x=Math.PI/2;
-  sphere(door,.413,1.25,.148,.049,.049,.036,'#a9c6dd');
+  const silverPlate=new THREE.MeshBasicMaterial({color:'#9fa8a4'});
+  const silverKnob=new THREE.MeshBasicMaterial({color:'#d3d9d6'});
+  const knobPlate=mesh(new THREE.CylinderGeometry(.044,.044,.023,20),silverPlate,door,.413,1.25,.102);knobPlate.rotation.x=Math.PI/2;
+  const knob=mesh(new THREE.SphereGeometry(1,20,14),silverKnob,door,.413,1.25,.148);knob.scale.set(.055,.055,.04);
   for(const y of [.49,2.16])box(door,-.51,y,.059,.025,.1,.035,'#bfae89',.004);
 
   // Sofa with curved upholstered cushions and hand-drawn woven pattern.
