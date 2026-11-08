@@ -54,3 +54,7 @@ single = html.replace(style_tag, '<style>' + css + '</style>')
 single = single.replace(script_tag, '<script>' + bundle.replace('</script', '<\\/script') + '</script>')
 (ROOT / 'little-us.html').write_text(single)
 print('Built dist/index.html and standalone little-us.html (fully offline).')
+
+# Keep the island-only export in sync with the main build.
+import subprocess, sys
+subprocess.run([sys.executable, str(ROOT / 'tools' / 'build_qingdao.py')], check=True)

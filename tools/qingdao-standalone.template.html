@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#e9f2f3">
+<title>青岛 · 小岛</title>
+<style>
+:root{color-scheme:light;--ink:#52757a;--paper:#fffcf0}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:radial-gradient(120% 95% at 55% 8%,#f7fbfb 0%,#e9f2f3 34%,#d9e7e9 66%,#c9dbde 100%)}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Songti SC",serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+#qingdao-stage{position:fixed;inset:0;overflow:hidden}
+.travel-qingdao-layer{position:absolute;inset:0;z-index:3;opacity:0;visibility:hidden;pointer-events:none;overflow:hidden;transition:opacity .65s ease,visibility .65s ease;background:radial-gradient(120% 95% at 55% 8%,#f7fbfb 0%,#e9f2f3 34%,#d9e7e9 66%,#c9dbde 100%)}
+.travel-qingdao-layer:after{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(70% 55% at 50% 62%,#ffffff8c,transparent 70%)}
+.travel-qingdao-layer.visible{opacity:1;visibility:visible;pointer-events:auto}
+.travel-qingdao-layer canvas{position:absolute;inset:0;z-index:1;width:100%;height:100%;display:block;touch-action:none;cursor:default}
+.travel-qingdao-layer[data-state="ready"] canvas{cursor:grab}
+.travel-qingdao-status{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + clamp(24px,4vh,42px));z-index:2;transform:translateX(-50%);margin:0;padding:9px 15px;border:1px solid #fffdf4;border-radius:999px;background:#fffcf0cf;color:#6084a2;font-size:11px;letter-spacing:.16em;white-space:nowrap;backdrop-filter:blur(10px);pointer-events:none;transition:opacity .5s}
+.travel-qingdao-status.is-fading{opacity:0}
+.qd-ui{position:fixed;inset:0;z-index:6;pointer-events:none}
+.qd-head{position:absolute;top:calc(env(safe-area-inset-top,0px) + clamp(20px,4vw,38px));left:clamp(20px,4.5vw,52px);max-width:min(56vw,520px)}
+.qd-kicker{margin:0 0 7px;color:#7b999d;font-size:10px;letter-spacing:.23em;text-transform:uppercase}
+.qd-head h1{margin:0;color:#4d7278;font:500 clamp(23px,3.1vw,35px)/1.08 "Songti SC",Georgia,serif;letter-spacing:.02em}
+.qd-note{margin:8px 0 0;color:#7d989b;font-size:11px;letter-spacing:.08em}
+.qd-replay{position:absolute;top:calc(env(safe-area-inset-top,0px) + clamp(18px,3.6vw,36px));right:clamp(18px,4vw,48px);pointer-events:auto;border:1px solid #ffffff;border-radius:999px;background:#fffcf0d9;color:#5d8186;padding:9px 15px;font:11px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;letter-spacing:.08em;backdrop-filter:blur(10px);cursor:pointer;transition:background .2s,transform .2s}
+.qd-replay:hover{background:#fffdf7;transform:translateY(-1px)}
+.qd-replay:active{transform:translateY(0)}
+.qd-error{position:fixed;left:50%;top:50%;z-index:9;transform:translate(-50%,-50%);margin:0;padding:16px 20px;border:1px solid #fff;border-radius:16px;background:#fffcf0e8;color:#8a675f;font-size:13px;text-align:center;backdrop-filter:blur(12px)}
+@media(max-width:700px){
+ .qd-head{top:calc(env(safe-area-inset-top,0px) + 20px);left:20px;max-width:calc(100vw - 120px)}
+ .qd-head h1{font-size:23px}
+ .qd-note{font-size:10px}
+ .qd-replay{top:calc(env(safe-area-inset-top,0px) + 20px);right:18px;padding:8px 12px;font-size:10px}
+ .travel-qingdao-status{bottom:calc(env(safe-area-inset-bottom,0px) + 22px);font-size:10px;letter-spacing:.1em}
+}
+</style>
+</head>
+<body>
+<main id="qingdao-stage" aria-label="青岛小岛三维场景"></main>
+<div class="qd-ui">
+  <header class="qd-head">
+    <p class="qd-kicker">QINGDAO · LITTLE US</p>
+    <h1>青岛 · 小岛</h1>
+    <p class="qd-note">一座会慢慢展开的海上小岛</p>
+  </header>
+  <button id="qingdao-replay" class="qd-replay" type="button">重播构建</button>
+</div>
+<p id="qingdao-error" class="qd-error" hidden>无法加载 3D 小岛，请确认浏览器支持 WebGL 并刷新页面。</p>
+<noscript><p class="qd-error">请开启 JavaScript 来查看小岛。</p></noscript>
+<script>__BUNDLE__</script>
+</body>
+</html>

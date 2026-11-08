@@ -14,6 +14,7 @@ Git 提交、构建产物和预览图规则见 [`GIT_WORKFLOW.md`](GIT_WORKFLOW.
 
 - 推荐 Mac 双击 `启动小屋.command`，固定使用 `http://127.0.0.1:4173`。也可在项目目录运行 `python3 tools/serve.py --open`。需要 Python 3。
 - 也可以直接双击 `little-us.html`，在 Chrome、Edge 或 Safari 中打开。这是包含全部代码的离线单文件。
+- 只想看青岛小岛：双击 `qingdao-island.html`。这是从当前青岛 GLB、海面、构建动画和拖动/缩放逻辑单独导出的离线单文件，不含小屋、地图页和回忆存储。修改青岛模型后执行 `python3 tools/build_qingdao.py` 重新生成；主构建 `python3 tools/build.py` 也会自动同步它。
 - 本地服务仅监听本机，终端按 Control+C 即可关闭。首次使用无需安装 Node 或 npm。
 
 浏览器需要支持 WebGL 并启用硬件加速。电脑优先，手机已有自适应布局和双指缩放；真实手机触摸体验和性能仍待确认。
