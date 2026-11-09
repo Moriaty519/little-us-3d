@@ -139,3 +139,15 @@
 @media(max-width:700px){
   .travel-qingdao-status{bottom:22px;font-size:10px;letter-spacing:.1em}
 }
+
+.city-scene-layer{position:fixed;inset:0;z-index:60;background:#f3ecdb}
+.city-scene-layer:not([hidden]){animation:citySceneIn .55s ease both}
+@keyframes citySceneIn{from{opacity:0}to{opacity:1}}
+.city-scene-layer[hidden]{display:none}
+.city-scene-frame{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:#f3ecdb}
+.city-scene-back{position:absolute;left:18px;top:18px;z-index:3;border:1px solid #e6dcc4;background:#fffcf0d9;color:#5b707f;border-radius:999px;padding:9px 14px;font-size:11px;letter-spacing:.04em;backdrop-filter:blur(8px);cursor:pointer}
+.city-scene-back:hover{background:#fffdf4}
+
+.travel-scene-box{margin:0 0 16px;padding:0 0 12px;border-bottom:1px solid #e3ddc8}
+.travel-scene-label{font-size:10px;letter-spacing:.15em;color:#b08d57;margin:0 0 10px;text-transform:uppercase}
+.travel-scene-box .travel-city-card{margin-bottom:9px;background:#f7eeda}

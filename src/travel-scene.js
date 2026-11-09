@@ -98,13 +98,15 @@ export function createTravelScene(container,onSelect,onFocusChange=()=>{}){
     return Math.max(1.55,1.05/aspect);
   }
   function qingdaoWorld(){return new THREE.Vector3(qingdaoLocal.x*MAP_SCALE,MAP_CENTER_Y+(qingdaoLocal.z+model.group.position.z)*MAP_SCALE,-qingdaoLocal.y*MAP_SCALE);}
+  function worldFor(lonlat){const p=model.point(lonlat[0],lonlat[1],.066);return new THREE.Vector3(p.x*MAP_SCALE,MAP_CENTER_Y+(p.z+model.group.position.z)*MAP_SCALE,-p.y*MAP_SCALE);}
+  let focusWorld=qingdaoWorld(),pendingFocusDone=null;
   function applyCamera(w=container.clientWidth,h=container.clientHeight){
     if(!w||!h)return;
     const aspect=w/h,p=smooth(focusProgress);
     const wallHeight=wallViewHeight(w,h),focusHeight=focusViewHeight(w,h),viewHeight=THREE.MathUtils.lerp(wallHeight,focusHeight,p);
     camera.top=viewHeight/2;camera.bottom=-camera.top;camera.right=camera.top*aspect;camera.left=-camera.right;
     const wallTarget=new THREE.Vector3(panX,MAP_CENTER_Y+panY,0),wallPosition=new THREE.Vector3(panX,MAP_CENTER_Y+panY,22);
-    const focusTargetPoint=qingdaoWorld();
+    const focusTargetPoint=focusWorld;
     const direction=new THREE.Vector3(Math.sin(focusAzimuth)*Math.cos(focusElevation),Math.sin(focusElevation),Math.cos(focusAzimuth)*Math.cos(focusElevation));
     const focusPosition=focusTargetPoint.clone().addScaledVector(direction,20);
     camera.position.lerpVectors(wallPosition,focusPosition,p);
@@ -207,7 +209,10 @@ export function createTravelScene(container,onSelect,onFocusChange=()=>{}){
       focusProgress=focusFrom+(focusTarget-focusFrom)*eased;
       if(p>=1){
         focusAnimating=false;focusProgress=focusTarget;
-        if(focusTarget===1){showIsland();}
+        if(focusTarget===1){
+          if(pendingFocusDone){const done=pendingFocusDone;pendingFocusDone=null;done();}
+          else{showIsland();}
+        }
         else{focusMode=false;onFocusChange(false);labelsDirty=true;measureLabels=true;markers.visible=true;ringMarker.visible=!!selected;labels.style.visibility='';labels.style.opacity='';}
       }
       applyCamera();sceneDirty=true;renderer.shadowMap.needsUpdate=true;
@@ -258,6 +263,13 @@ export function createTravelScene(container,onSelect,onFocusChange=()=>{}){
     mapRoot.rotation.x=oldRotation;focusProgress=oldProgress;applyCamera();mapRoot.updateMatrixWorld(true);
     return {left:Math.min(...xs),top:Math.min(...ys),width:Math.abs(xs[1]-xs[0]),height:Math.abs(ys[1]-ys[0])};
   }
+  function focusCity(lonlat,onDone){
+    focusWorld=worldFor(lonlat);pendingFocusDone=onDone||null;
+    if(focusTarget===1&&!focusAnimating){
+      const done=pendingFocusDone;pendingFocusDone=null;if(done)done();return;
+    }
+    focusDiorama();
+  }
   function focusDiorama(){
     if(focusTarget===1&&!focusAnimating)return;
     if(focusProgress<.01){
@@ -291,6 +303,6 @@ export function createTravelScene(container,onSelect,onFocusChange=()=>{}){
       tap.reset();panning=null;orbit=null;pointers.clear();pinch=null;onFocusChange(false);
     }
   }
-  return {setRecords,setPreview,select,setActive,fit,reset,zoom,mapBounds,focusDiorama,exitDiorama,isFocused:()=>focusProgress>.01||focusMode,debug:()=>({focusProgress,focusTarget,zoom:userZoom,panX,panY,focusAzimuth,focusElevation,focusZoom})};
+  return {setRecords,setPreview,select,setActive,fit,reset,zoom,mapBounds,focusCity,focusDiorama,exitDiorama,isFocused:()=>focusProgress>.01||focusMode,debug:()=>({focusProgress,focusTarget,zoom:userZoom,panX,panY,focusAzimuth,focusElevation,focusZoom})};
 
 }
