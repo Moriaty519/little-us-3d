@@ -6,6 +6,7 @@ import { createTapTracker } from './ui.js';
 import { layoutTravelLabels } from './travel-labels.js';
 import { createQingdaoIsland, QINGDAO_ID, QINGDAO_LONLAT } from './qingdao-island.js';
 
+const MODEL_CITY_IDS=['110000','120000','630100'];
 const MAP_SCALE=WALL_DECOR_LAYOUT.view.scale;
 const MAP_WIDTH=WALL_DECOR_LAYOUT.map.width*MAP_SCALE;
 const MAP_HEIGHT=WALL_DECOR_LAYOUT.map.height*MAP_SCALE;
@@ -67,10 +68,12 @@ export function createTravelScene(container,onSelect,onFocusChange=()=>{}){
 
   function rebuild(){
     sceneDirty=true;labelsDirty=true;measureLabels=true;hovered=null;markers.clear();labels.replaceChildren(leaders);leaders.replaceChildren();labelEntries=[];
-    const displayed=new Map(counts);if(!displayed.has(QINGDAO_ID))displayed.set(QINGDAO_ID,0);if(preview&&!displayed.has(preview))displayed.set(preview,0);
+    const displayed=new Map(counts);if(!displayed.has(QINGDAO_ID))displayed.set(QINGDAO_ID,0);
+    for(const id of MODEL_CITY_IDS)if(!displayed.has(id))displayed.set(id,0);
+    if(preview&&!displayed.has(preview))displayed.set(preview,0);
     for(const [id,count] of displayed){
       const city=CITY_BY_ID.get(id);if(!city)continue;
-      const landmark=id===QINGDAO_ID;
+      const landmark=id===QINGDAO_ID||MODEL_CITY_IDS.includes(id);
       const g=marker(markers,0,0,landmark?landmarkMat:lightMat);g.userData.cityId=id;
       const local=model.point(city.lon,city.lat);g.position.set(local.x,local.y,local.z);
       const button=document.createElement('button');button.className='travel-city-label';button.textContent=cityName(city)+(landmark||count?'':' · 待保存');

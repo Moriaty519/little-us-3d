@@ -53,9 +53,11 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
       });
       layer.append(frame,close);page.append(layer);
     }
-    const frame=layer.querySelector('iframe');
-    if(frame.dataset.src!==scene.src){frame.dataset.src=scene.src;frame.src=scene.src;}
-    const show=()=>{layer.hidden=false;};
+    const show=()=>{
+      layer.hidden=false;
+      const frame=layer.querySelector('iframe');
+      if(frame.dataset.src!==scene.src){frame.dataset.src=scene.src;frame.src=scene.src;}
+    };
     if(view&&scene.lonlat){closeDrawer();view.focusCity(scene.lonlat,show);}
     else show();
   }
