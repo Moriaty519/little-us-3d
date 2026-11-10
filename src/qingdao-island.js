@@ -223,6 +223,9 @@ export function createQingdaoIsland(container){
       mesh.userData.base=mesh.geometry.attributes.position.array.slice();
       shore.push(mesh);
     }
+    // Slightly wider island footprint; keep the beach height unchanged so
+    // the church, beer and rocks stay seated at the same level.
+    for(const mesh of grouped.island){mesh.scale.x*=1.08;mesh.scale.z*=1.08;}
     // The source hull is a rounded box. Taper the windshield end into a real
     // pointed bow while leaving the fishing stern untouched.
     for(const object of grouped.yacht){
@@ -302,6 +305,24 @@ export function createQingdaoIsland(container){
     const yachtRoot=new THREE.Group();yachtRoot.name='QD_Yacht_Group';root.add(yachtRoot);
     for(const object of grouped.yacht)yachtRoot.attach(object);
     yachtRoot.position.set(2.0,-YACHT_SINK,2.0);
+
+    // Scale the church and beer as rigid groups about their footprint centers,
+    // so their parts do not drift apart while growing.
+    function rigidScale(items,amount,name){
+      if(!items.length)return null;
+      root.updateMatrixWorld(true);
+      const box=new THREE.Box3();
+      for(const object of items)box.expandByObject(object);
+      const center=box.getCenter(new THREE.Vector3());
+      const group=new THREE.Group();group.name=name;
+      group.position.set(center.x,box.min.y,center.z);root.add(group);
+      for(const object of items)group.attach(object);
+      group.scale.setScalar(amount);
+      for(const object of items)object.userData.baseY=object.position.y;
+      return group;
+    }
+    rigidScale(grouped.church,1.08,'QD_Church_Group');
+    rigidScale(grouped.beer,1.08,'QD_Beer_Group');
 
     plan=[
       {items:grouped.rocks,start:.85,dur:.8,off:-2.6,stagger:.06},
