@@ -4,12 +4,15 @@ export const ALBUM_TEMPLATES={
   daily:{name:'日常拼接',capacity:3,noteWidth:335,noteSize:19,noteLines:4},
   travel:{name:'旅行图文',capacity:2,noteWidth:345,noteSize:20,noteLines:8},
   anniversary:{name:'纪念日',capacity:2,noteWidth:335,noteSize:23,noteLines:4},
-  film:{name:'胶片格子',capacity:6,noteWidth:330,noteSize:18,noteLines:2},
+  six:{name:'六张照片',capacity:6,noteWidth:330,noteSize:18,noteLines:1},
+  film:{name:'六张照片',capacity:6,noteWidth:330,noteSize:18,noteLines:1},
   letter:{name:'一封短信',capacity:1,noteWidth:340,noteSize:21,noteLines:13},
-  large:{name:'一张大图',capacity:1,noteWidth:330,noteSize:22,noteLines:8}
+  large:{name:'一张大图',capacity:1,noteWidth:330,noteSize:22,noteLines:8},
+  quad:{name:'四张照片',capacity:4,noteWidth:330,noteSize:20,noteLines:1},
+  five:{name:'五张照片',capacity:5,noteWidth:330,noteSize:20,noteLines:1}
 };
 // Public choices are restricted; older stored layouts remain readable and importable.
-export const ALBUM_TEMPLATE_CHOICES=['large','anniversary','letter','daily'];
+export const ALBUM_TEMPLATE_CHOICES=['letter','anniversary','daily','quad','five','six'];
 export async function albumLoad(){return await memoryTransaction('readonly',s=>s.getAll(),'albums');}
 export async function albumSave(record){await memoryTransaction('readwrite',s=>s.put(record),'albums');}
 export async function albumRemove(id){await memoryTransaction('readwrite',s=>s.delete(id),'albums');}

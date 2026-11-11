@@ -26,12 +26,22 @@ export function createPopUp({scene,room,leftWall,backWall,furniture,floor,textur
     const mesh=new THREE.Mesh(geo,mat);parent.add(mesh);return mesh;
   }
   sheet(paper,[[-5.3,-4.25],[5.3,-4.25],[5.3,4.25],[-5.3,4.25]],inner);
+  const backShape=new THREE.Shape();[[-5.3,-4.25],[5.3,-4.25],[5.3,4.25],[-5.3,4.25]].forEach(([x,z],i)=>i?backShape.lineTo(x,-z):backShape.moveTo(x,-z));backShape.closePath();
+  const backGeo=new THREE.ExtrudeGeometry(backShape,{depth:.11,bevelEnabled:false});backGeo.rotateX(-Math.PI/2);
+  const backMesh=new THREE.Mesh(backGeo,outer);backMesh.position.y=-.11;paper.add(backMesh);
+  const shadowCanvas=document.createElement('canvas');shadowCanvas.width=shadowCanvas.height=256;
+  const sctx=shadowCanvas.getContext('2d');const sgrad=sctx.createRadialGradient(128,128,14,128,128,126);
+  sgrad.addColorStop(0,'rgba(46,36,24,.40)');sgrad.addColorStop(.55,'rgba(46,36,24,.16)');sgrad.addColorStop(1,'rgba(46,36,24,0)');
+  sctx.fillStyle=sgrad;sctx.fillRect(0,0,256,256);
+  const shadowTex=new THREE.CanvasTexture(shadowCanvas);shadowTex.colorSpace=THREE.SRGBColorSpace;
+  const shadowPlane=new THREE.Mesh(new THREE.PlaneGeometry(14.6,12.2),new THREE.MeshBasicMaterial({map:shadowTex,transparent:true,depthWrite:false,opacity:.75,toneMapped:false}));
+  shadowPlane.rotation.x=-Math.PI/2;shadowPlane.position.set(.16,-.20,.12);paper.add(shadowPlane);
   paper.position.y=-.275;
   function flap(name,x,z,points,mat,y){const hinge=new THREE.Group();hinge.name=name;hinge.position.set(x,y,z);hinge.userData.outline=points;paper.add(hinge);sheet(hinge,points,mat);return hinge;}
-  const back=flap('Envelope top crease',0,-4.25,[[-5.3,0],[5.3,0],[0,4.85]],outer,.085);
-  const left=flap('Envelope left crease',-5.3,0,[[0,-4.25],[0,4.25],[5.65,0]],outer,.045);
-  const right=flap('Envelope right crease',5.3,0,[[0,4.25],[0,-4.25],[-5.65,0]],outer,.065);
-  const front=flap('Envelope lower crease',0,4.25,[[5.3,0],[-5.3,0],[0,-4.85]],inner,.025);
+  const back=flap('Envelope top crease',0,-4.25,[[-5.3,0],[5.3,0],[0,4.25]],outer,.075);
+  const left=flap('Envelope left crease',-5.3,0,[[0,-4.25],[0,4.25],[5.3,0]],outer,.055);
+  const right=flap('Envelope right crease',5.3,0,[[0,4.25],[0,-4.25],[-5.3,0]],outer,.035);
+  const front=flap('Envelope lower crease',0,4.25,[[5.3,0],[-5.3,0],[0,-4.25]],inner,.015);
   function snowflake(ctx,x,z,size,color='#fbfdff'){
     ctx.save();ctx.translate(x,z);ctx.scale(size,size);ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=.07;ctx.lineCap='round';
     for(let i=0;i<6;i++){
@@ -53,10 +63,7 @@ export function createPopUp({scene,room,leftWall,backWall,furniture,floor,textur
     const ink=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({map,transparent:true,depthWrite:false,toneMapped:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}));ink.name='Exterior envelope print';ink.position.y=.042;hinge.add(ink);
   }
   function stitch(ctx,points,color){ctx.strokeStyle=color;ctx.lineWidth=.019;ctx.setLineDash([.07,.07]);ctx.beginPath();points.forEach(([x,z],i)=>i?ctx.lineTo(x,z):ctx.moveTo(x,z));ctx.closePath();ctx.stroke();ctx.setLineDash([]);}
-  decorate(front,ctx=>{stitch(ctx,[[4.75,-.19],[-4.75,-.19],[0,-4.35]],'#c3d0dc');});
-  const sideArt=ctx=>{stitch(ctx,[[.22,-3.8],[.22,3.8],[5.08,0]],'#eef4f8');};
-  decorate(left,sideArt);decorate(right,ctx=>{ctx.scale(-1,1);sideArt(ctx);});
-  decorate(back,ctx=>{stitch(ctx,[[-4.7,.2],[4.7,.2],[0,4.36]],'#eef4f8');});
+  // Seams are the true flap edges; no inset stitching that reads as a misaligned crease.
   // Fine scored lines remain visible when the letter is fully spread.
   for(const [x,z,w,d] of [[0,-4.25,10.6,.018],[0,4.25,10.6,.018],[-5.3,0,.018,8.5],[5.3,0,.018,8.5]]){
     const line=new THREE.Mesh(new THREE.BoxGeometry(w,.006,d),crease);line.position.set(x,.04,z);paper.add(line);

@@ -17,10 +17,6 @@ export function createProjectionPlayer(renderer,onChange){
   function drawImage(image,offset=0){
     ctx.save();ctx.translate(offset,0);ctx.fillStyle='#f1ebd8';ctx.fillRect(0,0,W,H);
     if(image){
-      const cover=Math.max(W/image.width,H/image.height);
-      ctx.save();ctx.filter='blur(32px)';ctx.globalAlpha=.35;
-      ctx.drawImage(image,(W-image.width*cover)/2,(H-image.height*cover)/2,image.width*cover,image.height*cover);ctx.restore();
-      ctx.fillStyle='#f1ebd850';ctx.fillRect(0,0,W,H);
       const r=cinemaContain(image.width,image.height,W,H);ctx.drawImage(image,r.x,r.y,r.width,r.height);
     }
     ctx.restore();

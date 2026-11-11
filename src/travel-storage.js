@@ -21,7 +21,7 @@ export function validJourneys(records){
   const ids=new Set();
   return records.map(r=>{
     if(!r||typeof r.id!=='string'||!r.id||r.id.length>120||ids.has(r.id)||!CITY_BY_ID.has(r.cityId)||typeof r.title!=='string'||r.title.length>60||typeof r.note!=='string'||r.note.length>4000||typeof r.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(r.date)||!Number.isFinite(Date.parse(r.date))||new Date(r.date).toISOString().slice(0,10)!==r.date||typeof r.createdAt!=='string'||!Number.isFinite(Date.parse(r.createdAt))||typeof r.updatedAt!=='string'||!Number.isFinite(Date.parse(r.updatedAt)))throw new Error('足迹内容不完整，尚未导入任何记录。');
-    if(!Array.isArray(r.photos)||r.photos.length>12||r.photos.some(p=>typeof p!=='string'||p.length>6_000_000||!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p)))throw new Error('足迹照片格式不正确，每段记录最多 12 张。');
+    if(!Array.isArray(r.photos)||r.photos.length>36||r.photos.some(p=>typeof p!=='string'||p.length>6_000_000||!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p)))throw new Error('足迹照片格式不正确，每个城市最多 36 张。');
     ids.add(r.id);
     return {id:r.id,cityId:r.cityId,title:r.title,date:r.date,note:r.note,photos:[...r.photos],createdAt:r.createdAt,updatedAt:r.updatedAt};
   });

@@ -76,17 +76,22 @@ export function albumSampleRecords(){
     ['daily','2025-03-16','把普通的一天，过成喜欢的样子。','听了一下午的歌，也没有做什么大事。\n但和你在一起的日子，总想好好留下来。',['home','flowers','street']],
     ['letter','2025-07-02','写给今天，也写给以后的我们。','今天想记录的，是一点小小的开心。\n\n一起听过的歌，吃过的晚饭，走过的那条街。\n\n等到以后翻到这一页，希望还能记起当时的心情。',['flowers']],
     ['anniversary','2025-08-18','和你，又走过了一季。','想把和你在一起的日子，慢慢写成一本书。',['lake','home']],
-    ['large','2025-09-12','这一刻，不用很多话。','把喜欢的风景，和喜欢的人，放在一起。',['snow']]
+    ['quad','2025-10-03','四张照片，四处风景。','把这一天的四个瞬间放在一起。',['home','flowers','street','hills']],
+    ['six','2025-11-08','六张照片，六段光。','把这一天的六个瞬间收进相册。',['street','home','flowers','hills','lake','snow']],
+    ['five','2025-12-01','五个瞬间，一段路。','走走停停，把喜欢的都收进相册。',['home','flowers','street','hills','lake']]
   ].map(([template,date,title,note,arts])=>({id:'album-sample-'+template,sample:true,date,title,note,template,photos:arts.map(kind=>({src:albumArt(kind),crop:{x:.5,y:.5,zoom:1}})),createdAt:date+'T00:00:00.000Z',updatedAt:date+'T00:00:00.000Z'}));
 }
 // Frames stay on one side of the crease; editor crop uses these same dimensions.
 export function albumPhotoSlots(template){
   const slots={
     daily:[[45,218,338,262,true],[486,107,277,224,true],[555,365,235,223,true]],
-    travel:[[24,73,381,523,false],[467,434,346,117,false]],
+    travel:[[24,73,381,523,true],[467,420,346,131,true]],
     anniversary:[[67,223,300,278,true],[493,214,290,287,true]],
-    film:Array.from({length:6},(_,i)=>[43+Math.floor(i/3)*434,166+(i%3)*137,338,123,false]),
-    letter:[[491,218,299,304,true]],large:[[456,73,380,523,false]]
+    film:[[40,140,390,210,true],[40,362,190,206,true],[235,362,190,206,true],[440,140,185,200,true],[630,140,185,200,true],[440,352,380,216,true]],
+    letter:[[470,73,350,523,true]],large:[[456,73,380,523,true]],
+    quad:[[40,140,380,200,true],[440,140,380,200,true],[40,350,380,200,true],[440,350,380,200,true]],
+    five:[[40,140,390,220,true],[440,140,380,220,true],[40,372,390,196,true],[440,372,185,196,true],[635,372,185,196,true]],
+    six:[[40,140,390,210,true],[40,362,190,206,true],[235,362,190,206,true],[440,140,185,200,true],[630,140,185,200,true],[440,352,380,216,true]]
   };
   return slots[template]||[];
 }
@@ -106,11 +111,22 @@ export async function renderAlbumPage(page,{cover=false,pageNumber=1,years='',co
   function tape(x,y,w=100,col='#d6c58f',angle=-.07){ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.globalAlpha=.85;box(0,0,w,26,col);ctx.globalAlpha=.5;for(let j=9;j<w;j+=13){ctx.strokeStyle='#fff1cd';ctx.beginPath();ctx.moveTo(j,3);ctx.lineTo(j+4,23);ctx.stroke();}ctx.restore();}
   function photoSlot(index,rect,{polaroid=false,angle=0,kind='hills',caption=''}={}){
     const [x,y,w,h]=rect;ctx.save();ctx.translate(x+w/2,y+h/2);ctx.rotate(angle);
-    if(polaroid){ctx.shadowColor='rgba(71,57,33,.13)';ctx.shadowBlur=13;ctx.shadowOffsetY=5;box(-w/2,-h/2,w,h,'#fffef7',2,'#e6dfd0');ctx.shadowColor='transparent';}
-    const padding=polaroid?12:0,footer=polaroid?42:0,dx=-w/2+padding,dy=-h/2+padding,dw=w-padding*2,dh=h-padding*2-footer;
-    const image=imgs[index]||defaults[['home','flowers','street','hills','lake','snow'].indexOf(kind)]||defaults[3],crop=photos[index]?.crop||{x:.5,y:.5,zoom:1};
+    const image=imgs[index]||defaults[['home','flowers','street','hills','lake','snow'].indexOf(kind)]||defaults[3];
+    let dx,dy,dw,dh;
+    if(polaroid){
+      const maxW=Math.max(40,w-16),maxH=Math.max(40,h-16-30);
+      const scale=Math.min(maxW/Math.max(1,image.naturalWidth),maxH/Math.max(1,image.naturalHeight));
+      dw=Math.max(20,image.naturalWidth*scale);dh=Math.max(20,image.naturalHeight*scale);
+      const fw=dw+16,fh=dh+16+30,fx=-fw/2,fy=-fh/2;
+      ctx.shadowColor='rgba(71,57,33,.16)';ctx.shadowBlur=13;ctx.shadowOffsetY=5;box(fx,fy,fw,fh,'#fffef7',2,'#e6dfd0');ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+      dx=fx+8;dy=fy+8;
+      const tapeCols=['#d9c9a8','#b7d0e2','#e5c9c4','#c9d8b8','#e5d2a0'];tape(fx+(fw-46)/2,fy-8,46,tapeCols[index%5],-.04);
+    }else{
+      const scale=Math.min(w/Math.max(1,image.naturalWidth),h/Math.max(1,image.naturalHeight));
+      dw=Math.max(20,image.naturalWidth*scale);dh=Math.max(20,image.naturalHeight*scale);dx=-dw/2;dy=-dh/2;
+    }
     if(!imgs[index]&&!r?.sample&&!placeholder){box(dx,dy,dw,dh,'#f0edde');}
-    else{const source=albumCropRect(image.naturalWidth,image.naturalHeight,dw,dh,crop);ctx.save();ctx.beginPath();ctx.rect(dx,dy,dw,dh);ctx.clip();ctx.drawImage(image,source.x,source.y,source.width,source.height,dx,dy,dw,dh);ctx.restore();}
+    else{box(dx,dy,dw,dh,'#f5f1e6');ctx.drawImage(image,dx,dy,dw,dh);}
     if(caption)text(caption,0,h/2-31,14,'#78856e',true,'center');ctx.restore();
     if(photos[index])hits.push({rect:[x,y,w,h],index:page.photoStart+index});
   }
@@ -122,7 +138,7 @@ export async function renderAlbumPage(page,{cover=false,pageNumber=1,years='',co
   if(template==='cover'){
     box(430,0,10,622,'#eee8d9');box(441,0,2,622,'#a9c6dd');box(447,0,1,622,'#8fb0cb');text('little us.',491,91,43,'#fff9e9');text('相册',494,149,19,'#f3ead8');text(years,494,570,14,'#f3ead8',false);
     const cp=(coverPhoto?await albumImage(coverPhoto.src):null)||defaults[3];
-    box(491,216,304,322,'#fffdf2',3);const crop=albumCropRect(cp.naturalWidth,cp.naturalHeight,280,270,coverPhoto?.crop);ctx.drawImage(cp,crop.x,crop.y,crop.width,crop.height,503,228,280,270);
+    box(491,216,304,322,'#fffdf2',3);ctx.fillStyle='#f5f1e6';ctx.fillRect(503,228,280,270);const coverScale=Math.min(280/cp.naturalWidth,270/cp.naturalHeight);const coverW=cp.naturalWidth*coverScale,coverH=cp.naturalHeight*coverScale;ctx.drawImage(cp,503+(280-coverW)/2,228+(270-coverH)/2,coverW,coverH);
   }else if(template==='daily'){
     title(44,88,340,30,'#535e4c',108);
     slot(0,{kind:'home'});slot(1,{kind:'flowers'});slot(2,{kind:'street'});tape(154,207,84,'#d9ceb4',0);tape(584,96,75,'#a9c6dd',0);lines(page.lines,47,512,19,24);
@@ -132,11 +148,17 @@ export async function renderAlbumPage(page,{cover=false,pageNumber=1,years='',co
     title(48,90,340,32,'#655c50',116);
     slot(0,{kind:'lake'});slot(1,{kind:'home'});tape(168,212,84,'#dfcbb4',0);tape(599,203,79,'#b7d0e2',0);
     lines(page.lines.slice(0,2),47,539,23,28,'#8d7968');lines(page.lines.slice(2),477,539,23,28,'#8d7968');
-  }else if(template==='film'){
-    title(44,85,342,29,'#535e4c',73);const frames=albumPhotoSlots(template);for(let i=0;i<6;i++){const [x,y,w,h]=frames[i];box(x,y,w,h,'#5c664f',2);photoSlot(i,[x+8,y+8,w-16,h-31],{kind:['street','home','flowers','hills','lake','snow'][i]});text(String(page.photoStart+i+1).padStart(2,'0'),x+10,y+h-17,10,'#e4e7d4',false);}
-    lines(page.lines.slice(0,1),45,580,18,22);lines(page.lines.slice(1),479,580,18,22);
+  }else if(template==='six'||template==='film'){
+    title(44,88,420,24,'#535e4c',38);
+    slot(0,{kind:'street'});slot(1,{kind:'home'});slot(2,{kind:'flowers'});slot(3,{kind:'hills'});slot(4,{kind:'lake'});slot(5,{kind:'snow'});
+  }else if(template==='quad'){
+    title(44,88,420,24,'#535e4c',38);
+    slot(0,{kind:'home'});slot(1,{kind:'flowers'});slot(2,{kind:'street'});slot(3,{kind:'lake'});
+  }else if(template==='five'){
+    title(44,88,420,24,'#535e4c',38);
+    slot(0,{kind:'home'});slot(1,{kind:'flowers'});slot(2,{kind:'street'});slot(3,{kind:'hills'});slot(4,{kind:'lake'});
   }else if(template==='letter'){
-    title(44,88,341,29,'#535e4c',106);for(let y=228;y<584;y+=29){ctx.strokeStyle='#eae4d6';ctx.beginPath();ctx.moveTo(45,y);ctx.lineTo(390,y);ctx.stroke();}lines(page.lines,47,201,21,29);slot(0,{kind:'flowers'});tape(599,207,80,'#b7d0e2',0);
+    title(44,88,341,29,'#535e4c',106);for(let y=228;y<584;y+=29){ctx.strokeStyle='#eae4d6';ctx.beginPath();ctx.moveTo(45,y);ctx.lineTo(390,y);ctx.stroke();}lines(page.lines,47,201,21,29);slot(0,{kind:'flowers'});
   }else if(template==='large'){
     slot(0,{kind:'snow'});title(49,148,338,34,'#535e4c',147);lines(page.lines,49,339,22,29);
   }

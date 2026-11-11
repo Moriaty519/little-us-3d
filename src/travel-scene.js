@@ -6,7 +6,7 @@ import { createTapTracker } from './ui.js';
 import { layoutTravelLabels } from './travel-labels.js';
 import { createQingdaoIsland, QINGDAO_ID, QINGDAO_LONLAT } from './qingdao-island.js';
 
-const MODEL_CITY_IDS=['110000','120000','630100'];
+const MODEL_CITY_IDS=['110000','120000','630100','632800'];
 const MAP_SCALE=WALL_DECOR_LAYOUT.view.scale;
 const MAP_WIDTH=WALL_DECOR_LAYOUT.map.width*MAP_SCALE;
 const MAP_HEIGHT=WALL_DECOR_LAYOUT.map.height*MAP_SCALE;

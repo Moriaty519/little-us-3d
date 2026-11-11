@@ -2,7 +2,7 @@ import { createCinemaScene } from './cinema-scene.js';
 import { cinemaLoad,cinemaSave,validCinema,CINEMA_PHOTO_LIMIT } from './cinema-storage.js';
 import { albumSampleRecords } from './album-pages.js';
 import { confirmAction,modalOpen } from './ui.js';
-import { createCinemaSorter,swapCinemaPhotos } from './cinema-sort.js';
+import { createCinemaSorter,moveCinemaPhotos } from './cinema-sort.js';
 
 export function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,onCoverChange=()=>{},getRoomPhotos=()=>[],getAlbumPages=()=>[],namespace='cinema',pageHash='#cinema',sceneFactory=createCinemaScene,loadRecord=cinemaLoad,saveRecord=cinemaSave,validateRecord=validCinema,playlistId='cinema-playlist',allowSamples=true,photoInterval=1000,sceneLabel='客厅投影',musicOnly=false,instrumentSound=false,swipePhotos=true}){
   const el=id=>document.getElementById(id.replace(/^cinema-/,namespace+'-')),page=el('cinema-page'),editor=el('cinema-editor');
@@ -45,11 +45,12 @@ export function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,
   function error(message){el('cinema-form-error').textContent=message;el('cinema-form-error').hidden=false;}
   const sorter=createCinemaSorter(el('cinema-photo-drafts'),(from,to,{keyboard=false}={})=>{
     if(!draft||processing||saving)return;
-    if(draft.photos.length)draft.photos=swapCinemaPhotos(draft.photos,from,to);else draft.sampleIds=swapCinemaPhotos(draft.sampleIds,from,to);
-    dirty=true;renderDraft();const card=el('cinema-photo-drafts').children[to];card?.focus({preventScroll:true});if(keyboard)card?.scrollIntoView({block:'nearest',inline:'nearest'});
+    if(draft.photos.length)draft.photos=moveCinemaPhotos(draft.photos,from,to);else draft.sampleIds=moveCinemaPhotos(draft.sampleIds,from,to);
+    const landed=from<to?to-1:to;
+    dirty=true;renderDraft();const card=el('cinema-photo-drafts').children[landed];card?.focus({preventScroll:true});if(keyboard)card?.scrollIntoView({block:'nearest',inline:'nearest'});
   });
   function renderDraft(){
-    sorter.reset();const list=photosFor(draft),grid=el('cinema-photo-drafts'),scrollTop=grid.scrollTop;grid.replaceChildren();
+    sorter.reset();const list=photosFor(draft),grid=el('cinema-photo-drafts'),scrollLeft=grid.scrollLeft;grid.replaceChildren();
     if(!list.length){const empty=document.createElement('p');empty.className='cinema-drafts-empty';empty.textContent='暂无照片';grid.append(empty);}
     list.forEach((photo,i)=>{
       const figure=document.createElement('div');figure.className='cinema-draft-photo';figure.tabIndex=0;figure.setAttribute('role','listitem');figure.dataset.photoId=photo.id;figure.setAttribute('aria-label','第 '+(i+1)+' 张照片，拖动或按方向键交换位置');figure.title='拖动交换位置';const frame=document.createElement('div'),image=document.createElement('img');image.src=photo.src;image.alt='影院照片 '+(i+1);image.draggable=false;frame.append(image);
@@ -57,11 +58,11 @@ export function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,
       const remove=document.createElement('button');remove.type='button';remove.className='cinema-remove';remove.textContent='×';remove.setAttribute('aria-label','移除第 '+(i+1)+' 张影院照片');remove.onclick=()=>{dirty=true;if(photo.sample!==undefined)draft.sampleIds.splice(i,1);else draft.photos.splice(i,1);renderDraft();};frame.append(remove);figure.append(frame);
       grid.append(figure);
     });
-    grid.scrollTop=scrollTop;
+    grid.scrollLeft=scrollLeft;
     el('cinema-samples').hidden=!allowSamples||draft.photos.length>0;el('cinema-samples').textContent=draft.sampleIds.length?'移除占位图':'恢复占位图';
     el('cinema-music-name').textContent=draft.music?.name||'未添加';el('cinema-music-upload').textContent=draft.music?'替换':'添加';el('cinema-music-remove').hidden=!draft.music;
   }
-  function openEditor(section='photos'){if(!loaded||saving){toast('本地存储尚未就绪。');return;}pause();generation++;const value=config();draft={photos:value.photos.map(p=>({...p})),music:value.music?{...value.music}:null,sampleIds:[...value.sampleIds]};dirty=false;processing=false;el('cinema-form').inert=false;el('cinema-save').disabled=false;el('cinema-form-error').hidden=true;renderDraft();editor.showModal();el('cinema-photo-drafts').scrollTop=0;editor.scrollTop=0;(section==='music'?el('cinema-music-upload'):el('cinema-upload')).focus();}
+  function openEditor(section='photos'){if(!loaded||saving){toast('本地存储尚未就绪。');return;}pause();generation++;const value=config();draft={photos:value.photos.map(p=>({...p})),music:value.music?{...value.music}:null,sampleIds:[...value.sampleIds]};dirty=false;processing=false;el('cinema-form').inert=false;el('cinema-save').disabled=false;el('cinema-form-error').hidden=true;renderDraft();editor.showModal();el('cinema-photo-drafts').scrollLeft=0;editor.scrollTop=0;(section==='music'?el('cinema-music-upload'):el('cinema-upload')).focus();}
   async function closeEditor(){if(saving)return false;if(dirty&&!await confirmAction('放弃修改？','未保存的内容会丢失。'))return false;editor.close();return true;}
   editor.addEventListener('close',()=>{sorter.reset();generation++;dirty=false;processing=false;draft=null;el('cinema-files').value='';el('cinema-music-file').value='';});
   editor.addEventListener('cancel',event=>{event.preventDefault();closeEditor();});
@@ -86,6 +87,7 @@ export function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,
   };
   el('cinema-music-remove').onclick=()=>{draft.music=null;dirty=true;renderDraft();};
   el('cinema-samples').onclick=()=>{draft.sampleIds=draft.sampleIds.length?[]:[0,1,2,3,4,5];dirty=true;renderDraft();};
+  el('cinema-reverse').onclick=()=>{if(!draft||processing||saving)return;sorter.reset();if(draft.photos.length)draft.photos.reverse();else draft.sampleIds.reverse();dirty=true;renderDraft();el('cinema-photo-drafts').scrollLeft=0;};
   el('cinema-form').onsubmit=async event=>{
     event.preventDefault();if(saving||processing||!draft)return;saving=true;el('cinema-form').inert=true;el('cinema-save').disabled=true;
     try{const next=validateRecord({id:playlistId,...draft,updatedAt:new Date().toISOString()});await saveRecord(next);record=next;index=0;dirty=false;editor.close();setMusic();dots();await Promise.all([syncCover(),show(0)]);toast('已保存');}

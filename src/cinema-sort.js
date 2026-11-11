@@ -1,7 +1,9 @@
-export function swapCinemaPhotos(items,from,to){
+export function moveCinemaPhotos(items,from,to){
   const next=[...items];
   if(!Number.isInteger(from)||!Number.isInteger(to)||from<0||from>=items.length||to<0||to>=items.length||from===to)return next;
-  [next[from],next[to]]=[next[to],next[from]];return next;
+  const [item]=next.splice(from,1);
+  next.splice(from<to?to-1:to,0,item);
+  return next;
 }
 
 export function createCinemaSorter(grid,onMove){
@@ -31,8 +33,8 @@ export function createCinemaSorter(grid,onMove){
     if(!drag?.active)return;
     const bounds=grid.getBoundingClientRect();
     if(drag.x>=bounds.left&&drag.x<=bounds.right&&drag.y>=bounds.top&&drag.y<=bounds.bottom){
-      const speed=drag.y<bounds.top+28?-12:drag.y>bounds.bottom-28?12:0;
-      const old=grid.scrollTop;grid.scrollTop+=speed;if(old!==grid.scrollTop)target();
+      const speed=drag.x<bounds.left+44?-14:drag.x>bounds.right-44?14:0;
+      const old=grid.scrollLeft;grid.scrollLeft+=speed;if(old!==grid.scrollLeft)target();
     }
     frame=requestAnimationFrame(track);
   }
@@ -67,8 +69,7 @@ export function createCinemaSorter(grid,onMove){
     if(drag||event.target.closest('button')||event.altKey||event.ctrlKey||event.metaKey)return;
     const card=event.target.closest('.cinema-draft-photo');if(!card)return;
     const list=cards(),from=list.indexOf(card);
-    const columns=Math.max(1,list.filter(item=>Math.abs(item.offsetTop-list[0].offsetTop)<2).length);
-    const offsets={ArrowLeft:-1,ArrowRight:1,ArrowUp:-columns,ArrowDown:columns};
+    const offsets={ArrowLeft:-1,ArrowRight:1,ArrowUp:-1,ArrowDown:1};
     let to;if(event.key in offsets)to=Math.max(0,Math.min(list.length-1,from+offsets[event.key]));else if(event.key==='Home')to=0;else if(event.key==='End')to=list.length-1;else return;
     event.preventDefault();if(from!==to)onMove(from,to,{keyboard:true});
   });

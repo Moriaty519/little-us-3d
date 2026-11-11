@@ -29,6 +29,9 @@ export function createAlbumScene(container,{onPhoto,onState,onLayout}){
     }
     position.needsUpdate=true;item.geometry.computeVertexNormals();item.geometry.computeBoundingSphere();dirty=true;
   }
+  const pageShapeCanvas=document.createElement('canvas');pageShapeCanvas.width=860;pageShapeCanvas.height=622;
+  const pageShapeCtx=pageShapeCanvas.getContext('2d');pageShapeCtx.fillStyle='#fff';pageShapeCtx.beginPath();pageShapeCtx.roundRect(0,0,860,622,21);pageShapeCtx.fill();
+  const pageShapeTexture=new THREE.CanvasTexture(pageShapeCanvas);pageShapeTexture.colorSpace=THREE.SRGBColorSpace;
   function sheet(rendered,texture=null,kind='full',backTexture=null){
     const half=kind!=='full',geometry=new THREE.PlaneGeometry(half?width/2:width,height,half?32:segments,16),logical=[],baseY=[];
     const uv=geometry.attributes.uv,position=geometry.attributes.position;
@@ -38,7 +41,7 @@ export function createAlbumScene(container,{onPhoto,onState,onLayout}){
     }
     const ownsTexture=!texture;if(!texture){texture=new THREE.CanvasTexture(rendered.canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());}
     const material=new THREE.MeshBasicMaterial({map:texture,transparent:true,alphaTest:.02,side:THREE.FrontSide});
-    const reverse=new THREE.MeshBasicMaterial({map:backTexture||null,color:backTexture?'#ffffff':'#eee7d6',transparent:true,alphaTest:.02,side:THREE.BackSide});
+    const reverse=new THREE.MeshBasicMaterial({map:backTexture||pageShapeTexture,color:backTexture?'#ffffff':'#eee7d6',transparent:true,alphaTest:.02,side:THREE.BackSide});
     const backGeometry=kind==='turn'?geometry.clone():geometry;
     if(kind==='turn'){const buv=backGeometry.attributes.uv;for(let i=0;i<buv.count;i++)buv.setX(i,albumTurnUV(logical[i],true));}
     const group=new THREE.Group(),mesh=new THREE.Mesh(geometry,material),back=new THREE.Mesh(backGeometry,reverse);mesh.castShadow=back.castShadow=true;group.add(mesh,back);scene.add(group);
@@ -62,7 +65,7 @@ export function createAlbumScene(container,{onPhoto,onState,onLayout}){
   }
   function layout(){
     const closed=isCover();closedStack.visible=closed;frame();
-    for(const [i,item] of entries){place(item,positionAt(i,current));item.group.visible=!closed||i===current;item.material.color.set(i===current?'#ffffff':'#eee8da');item.group.rotation.y=pages[i]?.cover&&!closed?-Math.PI:0;if(pages[i]?.cover&&closed)item.group.position.x=albumBookPose(0).hingeX;}
+    for(const [i,item] of entries){place(item,positionAt(i,current));item.group.visible=i===current;item.material.color.set(i===current?'#ffffff':'#eee8da');item.group.rotation.y=pages[i]?.cover&&!closed?-Math.PI:0;if(pages[i]?.cover&&closed)item.group.position.x=albumBookPose(0).hingeX;}
     dirty=true;
   }
   function fit(){const w=container.clientWidth,h=container.clientHeight;if(!w||!h)return;mobile=matchMedia('(max-width:700px)').matches;renderer.setSize(w,h);aspect=w/h;if(transition)updateTransition(transition.p);else layout();dirty=true;}
@@ -160,5 +163,5 @@ export function createAlbumScene(container,{onPhoto,onState,onLayout}){
     for(let i=0;i<positions.count;i++){const point=new THREE.Vector3().fromBufferAttribute(positions,i).applyMatrix4(item.group.matrixWorld).project(camera),x=bounds.left+(point.x+1)*bounds.width/2,y=bounds.top+(1-point.y)*bounds.height/2;left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}
     return {left,top,width:right-left,height:bottom-top};
   }
-  return {show,fit,coverBounds,isBusy:()=>loading||!!transition,setActive:value=>{active=value;if(!value){version++;loading=false;down=null;if(transition)finishTransition(false);}else{fit();dirty=true;}},dispose:()=>{disposed=true;version++;if(transition)finishTransition(false);observer.disconnect();clear();stackGeometry.dispose();closedStack.children.forEach(edge=>edge.material.dispose());contact.geometry.dispose();contact.material.dispose();shadowTexture.dispose();ground.geometry.dispose();ground.material.dispose();renderer.dispose();}};
+  return {show,fit,coverBounds,pageCorner:()=>{const item=entries.get(current);if(!item)return null;const point=new THREE.Vector3(width/2,height/2,0);item.group.localToWorld(point);point.project(camera);const rect=container.getBoundingClientRect();return {x:rect.left+(point.x+1)*rect.width/2,y:rect.top+(1-point.y)*rect.height/2};},isBusy:()=>loading||!!transition,setActive:value=>{active=value;if(!value){version++;loading=false;down=null;if(transition)finishTransition(false);}else{fit();dirty=true;}},dispose:()=>{disposed=true;version++;if(transition)finishTransition(false);observer.disconnect();clear();stackGeometry.dispose();closedStack.children.forEach(edge=>edge.material.dispose());contact.geometry.dispose();contact.material.dispose();shadowTexture.dispose();ground.geometry.dispose();ground.material.dispose();renderer.dispose();}};
 }
