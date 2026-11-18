@@ -333,8 +333,8 @@ export function createRoom(container, onSelect, {projection=false}={}) {
   const sharedMap=createChinaMapModel(),map=sharedMap.group,mapPlane=sharedMap.face;
   map.position.set(-4.39,2.82,1.05);map.rotation.y=Math.PI/2;room.add(map);objects.push(map);
 
-  // A little wooden birdhouse; the bird is the tour guide, not a memory entry.
-  const bird=group(room,3.65,FLOOR,2.60);bird.rotation.y=-.18;bird.name='Little wooden birdhouse';
+  // Birdhouse holds memories; the perched bird stays the tour guide and wins overlapping picks.
+  const bird=group(room,3.65,FLOOR,2.60,'bird');bird.rotation.y=-.18;bird.name='Little wooden birdhouse';
   // Wooden pedestal and upright support beneath the house.
   cyl(bird,0,.055,0,.33,.38,.1,'#d9c19b');box(bird,0,.59,0,.075,1.1,.075,'#bea57e',.014);
   const house=group(bird,0,1.13,0);
@@ -379,9 +379,35 @@ export function createRoom(container, onSelect, {projection=false}={}) {
     furniture:featureFurniture,floor:[floorBase,floorTop],texture:canvasTexture});
 
   const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();const tap=createTapTracker({distance:6});let hoverId=null;
-  function hit(event){camera.updateMatrixWorld();const rect=renderer.domElement.getBoundingClientRect();pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);raycaster.setFromCamera(pointer,camera);const hits=raycaster.intersectObjects(room.children,true);for(const h of hits){let obj=h.object;while(obj&&obj!==room){if(obj===birdCharacter.group)return {userData:{objectId:'bird',action:'bird-tour'}};if(obj.userData.objectId)return obj;obj=obj.parent;} // Furniture behind a wall is not clickable.
-      if(h.object.material&&h.object.material.transparent!==true)return null;
-    }return null;}
+  function hit(event){
+    camera.updateMatrixWorld();
+    const rect=renderer.domElement.getBoundingClientRect();
+    pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);
+    raycaster.setFromCamera(pointer,camera);
+    const hits=raycaster.intersectObjects(room.children,true);
+    // Within a small depth band, bird beats birdhouse so overlapping clicks start the tour.
+    const near=hits[0]?hits[0].distance+.12:0;
+    let houseHit=null;
+    for(const h of hits){
+      let obj=h.object,picked=null,isBird=false;
+      while(obj&&obj!==room){
+        if(obj===birdCharacter.group){isBird=true;break;}
+        if(obj.userData.objectId){picked=obj;break;}
+        obj=obj.parent;
+      }
+      if(isBird&&h.distance<=near)return {userData:{objectId:'bird',action:'bird-tour'}};
+      if(picked){
+        if(picked.userData.objectId==='bird'){if(h.distance<=near)houseHit=houseHit||picked;continue;}
+        return picked;
+      }
+      // Furniture behind a wall is not clickable.
+      if(h.object.material&&h.object.material.transparent!==true){
+        if(h.distance<=near&&!houseHit)return null;
+        if(h.distance>near)return houseHit;
+      }
+    }
+    return houseHit;
+  }
   renderer.domElement.addEventListener('pointerdown',e=>{if(interactive)tap.begin(e);});
   renderer.domElement.addEventListener('pointerup',e=>{if(interactive&&tap.end(e)){const obj=hit(e);if(obj){selectObject(obj.userData.objectId);onSelect(obj.userData.objectId,{action:obj.userData.action});}}});
   renderer.domElement.addEventListener('pointercancel',e=>tap.cancel(e));

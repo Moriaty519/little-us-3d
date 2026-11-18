@@ -21,7 +21,7 @@ export function createTravelScene(container,onSelect,onFocusChange=()=>{}){
   renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setClearColor(0,0);
   renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-  renderer.domElement.setAttribute('aria-label','挂在墙上的中国足迹地图，点击青岛进入微缩场景');
+  renderer.domElement.setAttribute('aria-label','挂在墙上的中国足迹地图，点击已有足迹的城市查看照片');
   container.prepend(renderer.domElement);
   const labels=document.createElement('div');labels.className='travel-labels';container.append(labels);
   const leaders=document.createElementNS('http://www.w3.org/2000/svg','svg');leaders.classList.add('travel-label-leaders');leaders.setAttribute('aria-hidden','true');labels.append(leaders);
@@ -68,7 +68,8 @@ export function createTravelScene(container,onSelect,onFocusChange=()=>{}){
 
   function rebuild(){
     sceneDirty=true;labelsDirty=true;measureLabels=true;hovered=null;markers.clear();labels.replaceChildren(leaders);leaders.replaceChildren();labelEntries=[];
-    const displayed=new Map(counts);if(!displayed.has(QINGDAO_ID))displayed.set(QINGDAO_ID,0);
+    const displayed=new Map(counts);
+    if(!displayed.has(QINGDAO_ID))displayed.set(QINGDAO_ID,0);
     for(const id of MODEL_CITY_IDS)if(!displayed.has(id))displayed.set(id,0);
     if(preview&&!displayed.has(preview))displayed.set(preview,0);
     for(const [id,count] of displayed){
@@ -76,8 +77,8 @@ export function createTravelScene(container,onSelect,onFocusChange=()=>{}){
       const landmark=id===QINGDAO_ID||MODEL_CITY_IDS.includes(id);
       const g=marker(markers,0,0,landmark?landmarkMat:lightMat);g.userData.cityId=id;
       const local=model.point(city.lon,city.lat);g.position.set(local.x,local.y,local.z);
-      const button=document.createElement('button');button.className='travel-city-label';button.textContent=cityName(city)+(landmark||count?'':' · 待保存');
-      button.setAttribute('aria-label',landmark?(count?`${cityName(city)}，${count} 段回忆，点击进入微缩场景`:`${cityName(city)}，微缩场景`):(count?`${cityName(city)}，${count} 段回忆`:`${cityName(city)}，待保存地点`));
+      const button=document.createElement('button');button.className='travel-city-label';button.textContent=cityName(city)+(count||landmark?'':' · 待保存');
+      button.setAttribute('aria-label',count?`${cityName(city)}，点击查看照片`:`${cityName(city)}，还未上传照片`);
       button.disabled=!count&&!landmark;button.onclick=()=>onSelect(id);labels.append(button);button.dataset.cityId=id;
       button.onfocus=()=>{focused=id;labelsDirty=true;};button.onblur=()=>{focused=null;labelsDirty=true;};
       const line=document.createElementNS('http://www.w3.org/2000/svg','line');leaders.append(line);

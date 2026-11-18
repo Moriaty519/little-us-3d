@@ -1,7 +1,6 @@
 import { createTravelScene } from './travel-scene.js';
 import { confirmAction,modalOpen } from './ui.js';
 import { CITY_BY_ID, cityName, findCities, journeyLoad, journeySave, journeyRemove, validJourneys } from './travel-storage.js';
-import { QINGDAO_ID } from './qingdao-island.js';
 
 export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
   const el=id=>document.getElementById(id),page=el('travel-page'),sidebar=el('travel-sidebar'),form=el('journey-form'),overlay=el('travel-drawer-overlay'),focusBack=el('travel-focus-back');
@@ -34,16 +33,13 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
     {id:'632800',name:'海西',province:'青海省',lonlat:[97.3708,37.3747],src:'地图/海西/haixi.html'}
   ];
   const isModelCity=id=>CITY_SCENES.some(scene=>scene.id===id);
-  function focusQingdao(){
-    if(!opened)return;
-    const scene=CITY_SCENES.find(s=>s.id===QINGDAO_ID);
-    if(scene)openCityScene(scene);
-  }
+  let sceneReturnCity=null;
   function openCityScene(scene){
+    sceneReturnCity=boardCity||scene.id;
     closePhotoBoard();closeDrawer();let layer=el('city-scene-layer');
     if(!layer){
       layer=document.createElement('div');layer.id='city-scene-layer';layer.className='city-scene-layer';layer.hidden=true;
-      const close=document.createElement('button');close.type='button';close.className='city-scene-back';close.textContent='← 返回地图';close.setAttribute('aria-label','返回地图');close.onclick=()=>closeCityScene();
+      const close=document.createElement('button');close.type='button';close.className='city-scene-back';close.textContent='← 返回照片墙';close.setAttribute('aria-label','返回照片墙');close.onclick=()=>closeCityScene();
       const frame=document.createElement('iframe');frame.className='city-scene-frame';frame.setAttribute('allow','fullscreen');frame.setAttribute('title','城市微缩场景');
       frame.addEventListener('load',()=>{
         try{
@@ -54,6 +50,9 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
         }catch(e){}
       });
       layer.append(frame,close);page.append(layer);
+    }else{
+      const close=layer.querySelector('.city-scene-back');
+      if(close){close.textContent='← 返回照片墙';close.setAttribute('aria-label','返回照片墙');}
     }
     const show=()=>{
       layer.hidden=false;
@@ -67,10 +66,12 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
     const layer=el('city-scene-layer');if(!layer)return;
     layer.hidden=true;const frame=layer.querySelector('iframe');frame.src='about:blank';frame.dataset.src='';
     view?.exitDiorama();
+    const returnId=sceneReturnCity;sceneReturnCity=null;
+    if(returnId)openPhotoBoard(returnId);
   }
   window.addEventListener('keydown',e=>{if(e.key==='Escape'&&!el('city-scene-layer')?.hidden)closeCityScene();});
 
-  /* ---------- polaroid board for cities without a 3D scene ---------- */
+  /* ---------- polaroid board — entry for every city ---------- */
   let boardLayer=null,boardCity=null;
   function openPhotoBoard(id){
     const city=CITY_BY_ID.get(id);if(!city)return;
@@ -78,7 +79,6 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
     for(const record of sorted(records.filter(r=>r.cityId===id))){
       (record.photos||[]).forEach((photo,index)=>items.push({photo,record,index}));
     }
-    if(!items.length){showCity(id,true,true);return;}
     boardCity=id;
     if(!boardLayer){
       boardLayer=document.createElement('div');boardLayer.className='photo-board-layer';boardLayer.hidden=true;
@@ -90,14 +90,21 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
       edit.innerHTML='<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.6 14.4 4.5 10.7 12.8 2.4a1.5 1.5 0 0 1 2.1 0l1.6 1.6a1.5 1.5 0 0 1 0 2.1l-8.3 8.3-3.8.9z"/><path d="m11.2 4 3.9 3.9"/></svg>';
       edit.onclick=e=>{e.stopPropagation();const cid=boardCity;closePhotoBoard();openCityEdit(cid);};
       head.append(date,edit);
-      boardLayer.append(back,head,board);page.append(boardLayer);
-      boardLayer._board=board;boardLayer._date=date;
+      const model=document.createElement('button');model.type='button';model.className='photo-board-model';model.setAttribute('aria-label','进入微缩场景');model.hidden=true;
+      model.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 3.8 8v8L12 20.8 20.2 16V8L12 3.2z"/><path d="M12 12.4 3.8 8M12 12.4l8.2-4.4M12 12.4V20.8"/></svg>';
+      model.onclick=e=>{e.stopPropagation();const scene=CITY_SCENES.find(s=>s.id===boardCity);if(scene)openCityScene(scene);};
+      boardLayer.append(back,head,board,model);page.append(boardLayer);
+      boardLayer._board=board;boardLayer._date=date;boardLayer._model=model;
       boardLayer.onclick=()=>closePhotoBoard();
     }
     boardLayer._items=items;
-    if(boardLayer._date)boardLayer._date.textContent=(items[0]?.record?.date||'').replaceAll('-','.');
+    if(boardLayer._date)boardLayer._date.textContent=cityName(city);
     const board=boardLayer._board;board.replaceChildren();
-    items.forEach((item,index)=>{
+    if(!items.length){
+      const empty=document.createElement('p');empty.className='photo-board-empty';empty.textContent='还未上传照片';
+      empty.onclick=e=>e.stopPropagation();
+      board.append(empty);
+    }else items.forEach((item,index)=>{
       const card=document.createElement('div');card.className='board-card';
       card.style.setProperty('--photo-rot',(((index%5)-2)*1.6)+'deg');
       const img=document.createElement('img');img.src=item.photo;img.alt='';img.loading='lazy';card.append(img);
@@ -110,6 +117,9 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
       card.onclick=e=>{e.stopPropagation();showPhoto(item.record,item.index);};
       board.append(card);
     });
+    const scene=CITY_SCENES.find(s=>s.id===id);
+    boardLayer.classList.toggle('has-model',!!scene);
+    if(boardLayer._model){boardLayer._model.hidden=!scene;if(scene)boardLayer._model.setAttribute('aria-label',`进入${scene.name}微缩场景`);}
     boardLayer.hidden=false;
     cityId=id;recordId=null;view?.select(id);
   }
@@ -131,7 +141,7 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
   function closePhotoBoard(){if(!boardLayer)return;boardLayer.hidden=true;boardCity=null;cityId=null;view?.select(null);}
   window.addEventListener('keydown',e=>{if(e.key==='Escape'&&boardLayer&&!boardLayer.hidden)closePhotoBoard();});
 
-  function update(refreshMap=true){if(refreshMap)view?.setRecords(records.filter(r=>!isModelCity(r.cityId)));}
+  function update(refreshMap=true){if(refreshMap)view?.setRecords(records);}
   function resetForm(){generation++;processing=false;dirty=false;draftPhotos=[];editingId=null;chosenCity=null;cityEditId=null;
     el('journey-photos').value='';el('journey-city-options').hidden=true;el('journey-city').setAttribute('aria-expanded','false');
     el('journey-city').disabled=false;el('travel-form-view').classList.remove('city-photo-edit');el('journey-delete').hidden=true;view?.setPreview(null);}
@@ -139,10 +149,8 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
   async function showCity(id,skipGuard=false){
     if(!skipGuard&&!await guard())return;
     const city=CITY_BY_ID.get(id);if(!city)return;
-    const scene=CITY_SCENES.find(s=>s.id===id);if(scene){openCityScene(scene);return;}
-    closePhotoBoard();
-    if(records.some(r=>r.cityId===id&&r.photos&&r.photos.length)){openPhotoBoard(id);return;}
-    openForm(id);
+    closeDrawer();
+    openPhotoBoard(id);
   }
   function showPhoto(record,index){
     const dialog=el('travel-lightbox');dialog._record=record;dialog._index=index;renderPhoto();dialog.showModal();
@@ -153,11 +161,8 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
     const city=CITY_BY_ID.get(cityId);if(!city)return;
     const entries=sorted(records.filter(r=>r.cityId===cityId));el('travel-city-title').textContent=cityName(city);
     const photoTotal=entries.reduce((n,r)=>n+((r.photos&&r.photos.length)||0),0);
-    el('travel-city-meta').textContent=`${city.province} · ${photoTotal} 张照片${cityId===QINGDAO_ID?' · 微缩场景':''}`;
+    el('travel-city-meta').textContent=`${city.province} · ${photoTotal} 张照片${isModelCity(cityId)?' · 微缩场景':''}`;
     const detail=el('travel-record-detail'),list=el('travel-record-list');detail.replaceChildren();list.replaceChildren();
-    if(cityId===QINGDAO_ID){const cta=action(detail,'进入微缩场景',()=>focusQingdao(),'travel-primary travel-diorama-cta');cta.setAttribute('aria-label','进入青岛微缩场景');}
-    const cityScene=CITY_SCENES.find(s=>s.id===cityId);
-    if(cityScene){const cta=action(detail,'进入微缩场景',()=>openCityScene(cityScene),'travel-primary travel-diorama-cta');cta.setAttribute('aria-label',`进入${cityScene.name}微缩场景`);}
     if(!entries.length){make(detail,'p','这里还没有回忆。给这座城市留下一段我们的故事吧。','travel-empty');return;}
     const record=entries.find(r=>r.id===recordId)||entries[0];recordId=record.id;
     const article=make(detail,'article',undefined,'travel-record-detail');const date=make(article,'time',record.date.replaceAll('-','.'));date.dateTime=record.date;
@@ -174,16 +179,19 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
   }
   function chooseCity(city){chosenCity=city;el('journey-city').value=city.province+' · '+cityName(city);el('journey-city-options').hidden=true;el('journey-city').setAttribute('aria-expanded','false');view?.setPreview(city.id);dirty=true;}
   function suggestions(){
-    chosenCity=null;view?.setPreview(null);const query=el('journey-city').value,list=el('journey-city-options');list.replaceChildren();const results=findCities(query).filter(city=>!isModelCity(city.id));list.hidden=!query.trim();el('journey-city').setAttribute('aria-expanded',String(!list.hidden));
-    
-    if(query.trim()&&!results.length)make(list,'p','未找到城市，请尝试完整城市名。');
-    for(const city of results){const option=action(list,city.province+' · '+cityName(city),()=>{chooseCity(city);el('journey-date').focus();});option.setAttribute('role','option');option.tabIndex=-1;}
+    chosenCity=null;view?.setPreview(null);const query=el('journey-city').value,list=el('journey-city-options');list.replaceChildren();
+    const taken=new Set(records.map(r=>r.cityId));
+    const results=findCities(query).filter(city=>!taken.has(city.id));
+    list.hidden=!query.trim();el('journey-city').setAttribute('aria-expanded',String(!list.hidden));
+    if(query.trim()&&!results.length)make(list,'p',taken.size&&findCities(query).some(c=>taken.has(c.id))?'该城市已有足迹，请从地图点开后编辑。':'未找到城市，请尝试完整城市名。');
+    for(const city of results){const option=action(list,city.province+' · '+cityName(city),()=>{chooseCity(city);el('journey-upload').focus();});option.setAttribute('role','option');option.tabIndex=-1;}
   }
+  function todayDate(){return new Date().toLocaleDateString('sv-SE');}
   function draftPreviews(){const list=el('journey-photo-previews');list.replaceChildren();draftPhotos.forEach((photo,index)=>{const figure=make(list,'figure');const img=make(figure,'img');img.src=photo;img.alt=`待保存照片 ${index+1}`;const remove=action(figure,'×',()=>{draftPhotos.splice(index,1);dirty=true;draftPreviews();});remove.setAttribute('aria-label',`移除第 ${index+1} 张待保存照片`);remove.disabled=processing;});}
   async function openForm(id=null,record=null){
     if(!await guard())return;if(!loaded){toast('浏览器存储不可用或尚未准备好，请稍后重试。');return;}
     closePhotoBoard();resetForm();form.reset();cityId=null;editingId=record?.id||null;chosenCity=CITY_BY_ID.get(record?.cityId||id)||null;draftPhotos=[...(record?.photos||[])];
-    el('journey-date').value=record?.date||new Date().toLocaleDateString('sv-SE');el('journey-title').value=record?.title||'';el('journey-note').value=record?.note||'';el('journey-error').hidden=true;el('journey-save').disabled=false;el('journey-upload').disabled=false;
+    el('journey-date').value=record?.date||todayDate();el('journey-title').value=record?.title||'';el('journey-note').value=record?.note||'';el('journey-error').hidden=true;el('journey-save').disabled=false;el('journey-upload').disabled=false;
     el('travel-form-title').textContent=record?'编辑足迹':'添加足迹';el('journey-save').textContent='保存';
     if(chosenCity){el('journey-city').value=chosenCity.province+' · '+cityName(chosenCity);view?.setPreview(chosenCity.id);}
     draftPreviews();setPanel('travel-form-view');openDrawer();el('journey-city').focus({preventScroll:true});
@@ -208,11 +216,11 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
     const recs=sorted(records.filter(r=>r.cityId===id));
     const photos=[];for(const r of recs)for(const p of (r.photos||[]))photos.push(p);
     cityEditId=id;cityId=id;chosenCity=city;editingId=null;draftPhotos=photos.slice(0,36);
-    el('journey-date').value=recs[0]?.date||new Date().toLocaleDateString('sv-SE');
+    el('journey-date').value=recs[0]?.date||todayDate();
     el('journey-city').value=city.province+' · '+cityName(city);
     el('journey-city').disabled=true;
     el('journey-title').value='';el('journey-note').value='';
-    el('travel-form-title').textContent='编辑照片';
+    el('travel-form-title').textContent='编辑足迹';
     el('journey-error').hidden=true;el('journey-save').disabled=false;el('journey-upload').disabled=false;
     el('travel-form-view').classList.add('city-photo-edit');el('journey-delete').hidden=false;
     draftPreviews();view?.setPreview(id);
@@ -221,16 +229,15 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
   form.onsubmit=async event=>{
     event.preventDefault();if(processing||saving||!loaded)return;el('journey-error').hidden=true;
     if(cityEditId){
-      const date=el('journey-date').value;
-      if(!date){formError('请选择日期。');return;}
+      if(!draftPhotos.length){formError('请至少保留一张照片。');return;}
       const existing=records.filter(r=>r.cityId===cityEditId);
       const base=existing[0],now=new Date().toISOString();
-      const record={id:base?.id||(globalThis.crypto?.randomUUID?.()||'journey-'+Date.now()+'-'+Math.random().toString(36).slice(2)),cityId:cityEditId,date,title:'',note:'',photos:[...draftPhotos],createdAt:base?.createdAt||now,updatedAt:now};
+      const record={id:base?.id||(globalThis.crypto?.randomUUID?.()||'journey-'+Date.now()+'-'+Math.random().toString(36).slice(2)),cityId:cityEditId,date:base?.date||todayDate(),title:'',note:'',photos:[...draftPhotos],createdAt:base?.createdAt||now,updatedAt:now};
       try{validJourneys([record]);saving=true;form.inert=true;el('journey-save').disabled=true;
         await journeySave(record);
         for(const r of existing){if(r.id!==record.id)await journeyRemove(r.id);}
         records=records.filter(r=>r.cityId!==cityEditId);records.push(record);
-        dirty=false;update();const cid=cityEditId;cityEditId=null;closeDrawer();
+        dirty=false;const cid=cityEditId;resetForm();update();closeDrawer();
         openPhotoBoard(cid);toast('已保存');
       }catch(error){formError(error.name==='QuotaExceededError'?'浏览器空间不足，请先导出备份，再整理一些照片。':error.message||'保存失败，请重试。');}
       finally{saving=false;form.inert=false;el('journey-save').disabled=false;}
@@ -238,11 +245,11 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
     }
     if(!chosenCity){const query=el('journey-city').value.trim(),exact=findCities(query).filter(c=>c.name===query||cityName(c)===query);if(exact.length===1)chooseCity(exact[0]);}
     if(!chosenCity){formError('请从城市列表中选择一个地点。');el('journey-city').focus();suggestions();return;}
-    const existing=records.filter(r=>r.cityId===chosenCity.id);
-    const base=editingId?existing.find(r=>r.id===editingId):existing[0];
+    if(records.some(r=>r.cityId===chosenCity.id)){formError('该城市已有足迹，请从地图点开后编辑。');return;}
+    if(!draftPhotos.length){formError('请至少上传一张照片。');return;}
     const now=new Date().toISOString();
-    const record={id:base?.id||(globalThis.crypto?.randomUUID?.()||'journey-'+Date.now()+'-'+Math.random().toString(36).slice(2)),cityId:chosenCity.id,date:el('journey-date').value,title:'',note:'',photos:[...draftPhotos],createdAt:base?.createdAt||now,updatedAt:now};
-    try{validJourneys([record]);saving=true;form.inert=true;el('journey-save').disabled=true;await journeySave(record);for(const r of existing){if(r.id!==record.id)await journeyRemove(r.id);}records=records.filter(r=>r.cityId!==chosenCity.id);records.push(record);dirty=false;recordId=record.id;update();showCity(record.cityId,true);toast('已保存');}catch(error){formError(error.name==='QuotaExceededError'?'浏览器空间不足，请先导出备份，再整理一些照片。':error.message||'保存失败，请重试。');}finally{saving=false;form.inert=false;el('journey-save').disabled=false;}
+    const record={id:globalThis.crypto?.randomUUID?.()||'journey-'+Date.now()+'-'+Math.random().toString(36).slice(2),cityId:chosenCity.id,date:todayDate(),title:'',note:'',photos:[...draftPhotos],createdAt:now,updatedAt:now};
+    try{validJourneys([record]);saving=true;form.inert=true;el('journey-save').disabled=true;await journeySave(record);records.push(record);const savedCity=record.cityId;dirty=false;recordId=record.id;resetForm();update();closeDrawer();openPhotoBoard(savedCity);toast('已保存');}catch(error){formError(error.name==='QuotaExceededError'?'浏览器空间不足，请先导出备份，再整理一些照片。':error.message||'保存失败，请重试。');}finally{saving=false;form.inert=false;el('journey-save').disabled=false;}
   };
   function open(updateURL=true){
     if(opened)return;opened=true;closePhotoBoard();onOpen();page.hidden=false;
@@ -250,9 +257,6 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
     try{
       if(!view)view=createTravelScene(el('travel-map-stage'),id=>{
         if(page.classList.contains('drawer-open')||saving)return;
-        if(id===QINGDAO_ID){focusQingdao();return;}
-        const scene=CITY_SCENES.find(s=>s.id===id);
-        if(scene){openCityScene(scene);return;}
         if(id)showCity(id);
         else if(view?.isFocused())view.exitDiorama();
         else if(!el('travel-detail-view').hidden)showList();
@@ -261,32 +265,55 @@ export function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onIm
         if(focused){closeDrawer();requestAnimationFrame(()=>focusBack.focus({preventScroll:true}));}
         else if(opened){requestAnimationFrame(()=>el('travel-add').focus({preventScroll:true}));}
       });
-      view.reset();view.setActive(true);view.setRecords(records.filter(r=>!isModelCity(r.cityId)));el('travel-map-loading').hidden=true;
+      view.reset();view.setActive(true);view.setRecords(records);el('travel-map-loading').hidden=true;
     }catch(error){console.error(error);el('travel-map-loading').textContent='3D 地图暂时无法显示，请开启浏览器硬件加速。城市列表和记录仍可使用。';}
     closeDrawer();el('travel-add').focus({preventScroll:true});if(!loaded)toast('正在读取本地足迹…');
   }
   async function close(updateURL=true){
     if(!opened)return true;if(!await guard()){if(!updateURL)history.replaceState(null,'','#map');return false;}
-    resetForm();closePhotoBoard();closeDrawer();focusActive=false;page.classList.remove('travel-focused');focusBack.hidden=true;opened=false;page.hidden=true;view?.setActive(false);el('travel-lightbox').close();onClose();if(updateURL&&location.hash==='#map')history.replaceState(null,'',location.pathname+location.search);return true;
+    resetForm();closePhotoBoard();
+    const sceneLayer=el('city-scene-layer');if(sceneLayer&&!sceneLayer.hidden){sceneReturnCity=null;sceneLayer.hidden=true;const frame=sceneLayer.querySelector('iframe');if(frame){frame.src='about:blank';frame.dataset.src='';}view?.exitDiorama();}
+    closeDrawer();focusActive=false;page.classList.remove('travel-focused');focusBack.hidden=true;opened=false;page.hidden=true;view?.setActive(false);el('travel-lightbox').close();onClose();if(updateURL&&location.hash==='#map')history.replaceState(null,'',location.pathname+location.search);return true;
   }
-  el('travel-back').onclick=()=>close();el('travel-add').onclick=()=>openForm();el('travel-city-add').onclick=()=>openForm(cityId);el('travel-close-detail').onclick=async()=>{await showList();};el('journey-delete').onclick=async()=>{if(!cityEditId||saving)return;const cid=cityEditId;const city=CITY_BY_ID.get(cid),owned=records.filter(r=>r.cityId===cid);if(!owned.length)return;
+  el('travel-back').onclick=()=>close();el('travel-add').onclick=()=>openForm();el('travel-city-add').onclick=()=>openForm(cityId);el('travel-close-detail').onclick=async()=>{await showList();};  el('journey-delete').onclick=async()=>{if(!cityEditId||saving)return;const cid=cityEditId;const city=CITY_BY_ID.get(cid),owned=records.filter(r=>r.cityId===cid);if(!owned.length)return;
     if(!await confirmAction('删除这条足迹？',`${cityName(city)}的照片和记录都会被删除，地图上也不再显示。`,'删除','取消'))return;
-    saving=true;try{for(const record of owned)await journeyRemove(record.id);records=records.filter(r=>r.cityId!==cid);cityEditId=null;dirty=false;update();closeDrawer();toast('已删除这条足迹');}catch{toast('删除失败，请重试。');}finally{saving=false;}
+    saving=true;try{for(const record of owned)await journeyRemove(record.id);records=records.filter(r=>r.cityId!==cid);resetForm();update();closeDrawer();toast('已删除这条足迹');}catch{toast('删除失败，请重试。');}finally{saving=false;}
   };
-  el('travel-close-form').onclick=async()=>{if(!await guard())return;const cid=cityEditId;if(cid){cityEditId=null;closeDrawer();openPhotoBoard(cid);return;}resetForm();closeDrawer();};
+  el('travel-close-form').onclick=async()=>{
+    if(!await guard())return;
+    const cid=cityEditId;
+    resetForm();
+    closeDrawer();
+    if(cid)openPhotoBoard(cid);
+  };
   async function closeFromOutside(){
     if(el('travel-form-view').hidden){closeDrawer();return;}
-    if(!dirty){closeDrawer();return;}
+    if(!dirty){resetForm();closeDrawer();return;}
     const save=await confirmAction('保存修改？','这条足迹有还没保存的修改。','保存','不保存');
     if(save){form.requestSubmit();return;}
     resetForm();closeDrawer();
   }
-  el('travel-drawer-close').onclick=closeDrawer;overlay.onclick=closeFromOutside;
+  el('travel-drawer-close').onclick=async()=>{
+    if(!el('travel-form-view').hidden){await closeFromOutside();return;}
+    closeDrawer();
+  };
+  overlay.onclick=closeFromOutside;
   el('travel-focus-back').onclick=()=>view?.exitDiorama();
-  el('travel-backup').onclick=onExport;el('travel-import').onclick=onImport;
+  if(el('travel-backup'))el('travel-backup').onclick=onExport;if(el('travel-import'))el('travel-import').onclick=onImport;
   el('travel-zoom-in').onclick=()=>view?.zoom(1.15);el('travel-zoom-out').onclick=()=>view?.zoom(1/1.15);el('travel-reset').onclick=()=>view?.reset();
   el('travel-lightbox-close').onclick=()=>el('travel-lightbox').close();el('travel-photo-prev').onclick=()=>nextPhoto(-1);el('travel-photo-next').onclick=()=>nextPhoto(1);
-  document.addEventListener('keydown',event=>{if(el('travel-lightbox').open){if(event.key==='ArrowLeft')nextPhoto(-1);if(event.key==='ArrowRight')nextPhoto(1);return;}if(view?.isFocused()){if(event.key==='Escape'){event.preventDefault();view.exitDiorama();}return;}if(!opened||modalOpen())return;if(event.key==='Escape'){if(page.classList.contains('drawer-open')){closeDrawer();return;}if(!el('journey-city-options').hidden){el('journey-city-options').hidden=true;el('journey-city').setAttribute('aria-expanded','false');return;}if(!el('travel-form-view').hidden)el('travel-close-form').click();else closeDrawer();}});
+  document.addEventListener('keydown',event=>{
+    if(el('travel-lightbox').open){if(event.key==='ArrowLeft')nextPhoto(-1);if(event.key==='ArrowRight')nextPhoto(1);return;}
+    if(view?.isFocused()){if(event.key==='Escape'){event.preventDefault();view.exitDiorama();}return;}
+    if(!opened||modalOpen())return;
+    if(event.key==='Escape'){
+      event.preventDefault();
+      if(!el('journey-city-options').hidden){el('journey-city-options').hidden=true;el('journey-city').setAttribute('aria-expanded','false');return;}
+      if(!el('travel-form-view').hidden&&page.classList.contains('drawer-open')){el('travel-close-form').click();return;}
+      if(page.classList.contains('drawer-open')){closeDrawer();return;}
+      if(!el('travel-form-view').hidden)el('travel-close-form').click();
+    }
+  });
   window.addEventListener('beforeunload',event=>{if(dirty||saving){event.preventDefault();event.returnValue='';}});
   const ready=journeyLoad().then(async list=>{records=validJourneys(list);await mergeFootprints();loaded=true;update();return true;}).catch(error=>{console.error(error);toast('浏览器存储不可用，足迹暂时无法保存。请关闭旧窗口后刷新。');return false;});
   async function mergeFootprints(){

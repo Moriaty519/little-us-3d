@@ -1,5 +1,5 @@
 import { validKtv } from './ktv-storage.js';
-import { memoryDatabase, memoryTransaction, validBackup } from './storage.js';
+import { detectHomeMode, homeList, homePut, homeRemove, isHomeMode, isMediaRef, memoryDatabase, memoryTransaction, validBackup } from './storage.js';
 import { validAlbums } from './album-storage.js';
 import { CHINA_CITIES } from './cities.js';
 import { validCinema } from './cinema-storage.js';
@@ -12,16 +12,16 @@ export function findCities(query){
   return CHINA_CITIES.filter(c=>(c.province+c.name).includes(q)||c.name.includes(q))
     .sort((a,b)=>(cityName(a)===q?-1:0)-(cityName(b)===q?-1:0)||a.name.localeCompare(b.name,'zh-CN')).slice(0,30);
 }
-export async function journeyLoad(){return await memoryTransaction('readonly',s=>s.getAll(),'journeys');}
-export async function journeySave(record){await memoryTransaction('readwrite',s=>s.put(record),'journeys');}
-export async function journeyRemove(id){await memoryTransaction('readwrite',s=>s.delete(id),'journeys');}
+export async function journeyLoad(){await detectHomeMode();if(isHomeMode())return await homeList('journeys');return await memoryTransaction('readonly',s=>s.getAll(),'journeys');}
+export async function journeySave(record){await detectHomeMode();if(isHomeMode()){await homePut('journeys',record);return;}await memoryTransaction('readwrite',s=>s.put(record),'journeys');}
+export async function journeyRemove(id){await detectHomeMode();if(isHomeMode()){await homeRemove('journeys',id);return;}await memoryTransaction('readwrite',s=>s.delete(id),'journeys');}
 export function validJourneys(records){
   if(!Array.isArray(records))throw new Error('足迹备份格式不正确。');
   if(records.length>2000)throw new Error('足迹最多保存 2000 段，尚未导入任何记录。');
   const ids=new Set();
   return records.map(r=>{
     if(!r||typeof r.id!=='string'||!r.id||r.id.length>120||ids.has(r.id)||!CITY_BY_ID.has(r.cityId)||typeof r.title!=='string'||r.title.length>60||typeof r.note!=='string'||r.note.length>4000||typeof r.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(r.date)||!Number.isFinite(Date.parse(r.date))||new Date(r.date).toISOString().slice(0,10)!==r.date||typeof r.createdAt!=='string'||!Number.isFinite(Date.parse(r.createdAt))||typeof r.updatedAt!=='string'||!Number.isFinite(Date.parse(r.updatedAt)))throw new Error('足迹内容不完整，尚未导入任何记录。');
-    if(!Array.isArray(r.photos)||r.photos.length>36||r.photos.some(p=>typeof p!=='string'||p.length>6_000_000||!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p)))throw new Error('足迹照片格式不正确，每个城市最多 36 张。');
+    if(!Array.isArray(r.photos)||r.photos.length>36||r.photos.some(p=>!isMediaRef(p,'image')))throw new Error('足迹照片格式不正确，每个城市最多 36 张。');
     ids.add(r.id);
     return {id:r.id,cityId:r.cityId,title:r.title,date:r.date,note:r.note,photos:[...r.photos],createdAt:r.createdAt,updatedAt:r.updatedAt};
   });
@@ -44,6 +44,13 @@ export async function saveFullBackup(memories,journeys,albums=[],cinema=undefine
   validAlbums(albums);
   if(cinema!==undefined)validCinema(cinema);
   if(ktv!==undefined)validKtv(ktv);
+  await detectHomeMode();
+  if(isHomeMode()){
+    const response=await fetch('/api/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({memories,journeys,albums,cinema,ktv})});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error||'导入失败，请重试。');
+    return;
+  }
   const db=await memoryDatabase();
   await new Promise((resolve,reject)=>{
     const tx=db.transaction(['memories','journeys','albums',...((cinema||ktv)?['settings']:[])],'readwrite');

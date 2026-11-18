@@ -2,6 +2,7 @@ import { createKtvScene } from './ktv-scene.js';
 import { ktvLoad,ktvSave,validKtv } from './ktv-storage.js';
 import { createGuitarStrummer } from './ktv-chords.js';
 import { confirmAction,modalOpen } from './ui.js';
+import { detectHomeMode, homeUploadFile, isHomeMode } from './home-store.js';
 
 const VIDEO_EXTENSIONS={mp4:'video/mp4',m4v:'video/x-m4v',webm:'video/webm',ogv:'video/ogg',ogg:'video/ogg',mov:'video/quicktime'};
 
@@ -70,13 +71,20 @@ export function createKtvApp({onOpen,onClose,onExport,onImport}){
   async function readVideo(file){
     const ext=file.name.split('.').pop().toLowerCase(),type=(file.type||VIDEO_EXTENSIONS[ext]||'').split(';')[0].trim();
     if(!type.startsWith('video/'))throw new Error('请选择视频文件（MP4 / WebM / OGG / MOV）。');
-    const src=await new Promise((resolve,reject)=>{
-      const reader=new FileReader();
-      reader.onprogress=event=>{if(event.lengthComputable)el('upload-status').textContent=`正在读取视频… ${Math.round(event.loaded/event.total*100)}%`;};
-      reader.onload=()=>resolve(String(reader.result));
-      reader.onerror=()=>reject(new Error('无法读取这个视频文件。'));
-      reader.readAsDataURL(file);
-    });
+    await detectHomeMode();
+    let src;
+    if(isHomeMode()){
+      el('upload-status').textContent='正在上传到小屋电脑…';
+      src=await homeUploadFile(file,'videos');
+    }else{
+      src=await new Promise((resolve,reject)=>{
+        const reader=new FileReader();
+        reader.onprogress=event=>{if(event.lengthComputable)el('upload-status').textContent=`正在读取视频… ${Math.round(event.loaded/event.total*100)}%`;};
+        reader.onload=()=>resolve(String(reader.result));
+        reader.onerror=()=>reject(new Error('无法读取这个视频文件。'));
+        reader.readAsDataURL(file);
+      });
+    }
     const duration=await probeVideo(src);
     return {name:file.name.slice(0,180),type,size:file.size,src,...(duration>0?{duration}:{})};
   }
@@ -142,7 +150,7 @@ export function createKtvApp({onOpen,onClose,onExport,onImport}){
   }
   el('back').onclick=()=>close();el('edit').onclick=openEditor;el('screen-back').onclick=leaveScreenView;el('video-play').onclick=toggleVideo;
   el('video-mute').onclick=()=>{videoMuted=!videoMuted;view?.setVideoMuted(videoMuted);try{localStorage.setItem('little-us-ktv-video-muted',String(videoMuted));}catch{}sync();};
-  el('backup').onclick=onExport;el('import').onclick=onImport;
+  if(el('backup'))el('backup').onclick=onExport;if(el('import'))el('import').onclick=onImport;
   el('light').onclick=()=>{const warm=view?.toggleLight();el('light').setAttribute('aria-pressed',String(!warm));};
   el('zoom-in').onclick=()=>view?.zoom(1.15);el('zoom-out').onclick=()=>view?.zoom(1/1.15);el('reset').onclick=()=>view?.reset();
   document.addEventListener('keydown',event=>{

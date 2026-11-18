@@ -36,6 +36,9 @@ coverage/
 little-us-全部回忆备份-*.json
 *.backup.json
 
+# Shared home-server media and records (keep local, do not commit)
+小屋数据/
+
 # Build output is intentionally tracked for direct download:
 #   dist/
 #   little-us.html

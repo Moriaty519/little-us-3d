@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#efe4d0">
+<title>海西</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:
+  radial-gradient(120% 95% at 52% 4%,#fdf7ec 0%,#f3e7d3 40%,#e8d7bc 78%,#dfc9a8 100%)}
+#stage{position:fixed;inset:0}
+#stage canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#stage canvas:active{cursor:grabbing}
+.error{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);margin:0;padding:14px 18px;
+  border-radius:14px;border:1px solid #fff;background:#fffcf0ee;color:#8a4a3a;font:13px/1.5 system-ui,sans-serif}
+</style>
+</head>
+<body>
+<div id="stage" aria-label="海西三维微缩景观"></div>
+<p id="error" class="error" hidden>无法加载 3D 场景，请用支持 WebGL 的浏览器打开。</p>
+<noscript><p class="error">请开启 JavaScript。</p></noscript>
+<script>__BUNDLE__</script>
+</body>
+</html>

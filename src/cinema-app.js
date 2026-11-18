@@ -3,8 +3,9 @@ import { cinemaLoad,cinemaSave,validCinema,CINEMA_PHOTO_LIMIT } from './cinema-s
 import { albumSampleRecords } from './album-pages.js';
 import { confirmAction,modalOpen } from './ui.js';
 import { createCinemaSorter,moveCinemaPhotos } from './cinema-sort.js';
+import { detectHomeMode, homeUploadFile, isHomeMode } from './home-store.js';
 
-export function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,onCoverChange=()=>{},getRoomPhotos=()=>[],getAlbumPages=()=>[],namespace='cinema',pageHash='#cinema',sceneFactory=createCinemaScene,loadRecord=cinemaLoad,saveRecord=cinemaSave,validateRecord=validCinema,playlistId='cinema-playlist',allowSamples=true,photoInterval=1000,sceneLabel='客厅投影',musicOnly=false,instrumentSound=false,swipePhotos=true}){
+export function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,onCoverChange=()=>{},getRoomPhotos=()=>[],getAlbumPages=()=>[],namespace='cinema',pageHash='#cinema',sceneFactory=createCinemaScene,loadRecord=cinemaLoad,saveRecord=cinemaSave,validateRecord=validCinema,playlistId='cinema-playlist',allowSamples=true,photoInterval=2000,sceneLabel='客厅投影',musicOnly=false,instrumentSound=false,swipePhotos=true}){
   const el=id=>document.getElementById(id.replace(/^cinema-/,namespace+'-')),page=el('cinema-page'),editor=el('cinema-editor');
   const examples=albumSampleRecords(),samplePhotos=[examples[0].photos[0],examples[2].photos[0],examples[3].photos[0],examples[0].photos[2],examples[0].photos[1],examples[2].photos[1]].map((p,i)=>({id:'cinema-sample-'+i,src:p.src,sample:i}));
   let record=null,draft=null,loaded=false,opened=false,view=null,index=0,playing=false,moving=false,muted=false,audio=null,audioSrc=null,timer=0,nextAt=0,toastTimer=0,generation=0,dirty=false,processing=false,saving=false,displayVersion=0,openVersion=0,renderedPlay=null,renderedMute=null;
@@ -49,6 +50,49 @@ export function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,
     const landed=from<to?to-1:to;
     dirty=true;renderDraft();const card=el('cinema-photo-drafts').children[landed];card?.focus({preventScroll:true});if(keyboard)card?.scrollIntoView({block:'nearest',inline:'nearest'});
   });
+  function draftScrollParts(){
+    const grid=el('cinema-photo-drafts');
+    const rail=grid?.closest('.cinema-drafts-rail');
+    return {grid,bar:rail?.querySelector('.cinema-drafts-bar'),thumb:rail?.querySelector('.cinema-drafts-thumb')};
+  }
+  function syncDraftScroll(){
+    const {grid,bar,thumb}=draftScrollParts();if(!grid||!bar||!thumb)return;
+    const max=Math.max(0,grid.scrollWidth-grid.clientWidth);
+    bar.hidden=max<=2;
+    if(max<=2){thumb.style.width='100%';thumb.style.left='0';return;}
+    const track=bar.clientWidth,thumbW=Math.max(36,track*(grid.clientWidth/grid.scrollWidth)),maxLeft=Math.max(0,track-thumbW);
+    thumb.style.width=thumbW+'px';
+    thumb.style.left=((grid.scrollLeft/max)*maxLeft)+'px';
+  }
+  let draftScrollBound=false,draftThumbDrag=null;
+  function bindDraftScroll(){
+    if(draftScrollBound)return;const {grid,bar,thumb}=draftScrollParts();if(!grid||!bar||!thumb)return;
+    draftScrollBound=true;
+    grid.addEventListener('scroll',syncDraftScroll,{passive:true});
+    window.addEventListener('resize',syncDraftScroll);
+    const scrollFromClientX=clientX=>{
+      const max=Math.max(0,grid.scrollWidth-grid.clientWidth);if(max<=2)return;
+      const rect=bar.getBoundingClientRect(),thumbW=thumb.offsetWidth,maxLeft=Math.max(0,rect.width-thumbW);
+      const left=Math.max(0,Math.min(maxLeft,clientX-rect.left-(draftThumbDrag?.offset||thumbW/2)));
+      grid.scrollLeft=maxLeft? (left/maxLeft)*max : 0;
+    };
+    thumb.addEventListener('pointerdown',e=>{
+      e.preventDefault();e.stopPropagation();
+      draftThumbDrag={offset:e.clientX-thumb.getBoundingClientRect().left};
+      thumb.setPointerCapture(e.pointerId);
+    });
+    thumb.addEventListener('pointermove',e=>{if(!draftThumbDrag)return;scrollFromClientX(e.clientX);});
+    thumb.addEventListener('pointerup',()=>{draftThumbDrag=null;});
+    thumb.addEventListener('pointercancel',()=>{draftThumbDrag=null;});
+    bar.addEventListener('pointerdown',e=>{
+      if(e.target===thumb)return;
+      e.preventDefault();
+      const thumbW=thumb.offsetWidth;
+      draftThumbDrag={offset:thumbW/2};
+      scrollFromClientX(e.clientX);
+      thumb.setPointerCapture(e.pointerId);
+    });
+  }
   function renderDraft(){
     sorter.reset();const list=photosFor(draft),grid=el('cinema-photo-drafts'),scrollLeft=grid.scrollLeft;grid.replaceChildren();
     if(!list.length){const empty=document.createElement('p');empty.className='cinema-drafts-empty';empty.textContent='暂无照片';grid.append(empty);}
@@ -59,7 +103,11 @@ export function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,
       grid.append(figure);
     });
     grid.scrollLeft=scrollLeft;
+    bindDraftScroll();
+    requestAnimationFrame(()=>{syncDraftScroll();requestAnimationFrame(syncDraftScroll);});
     el('cinema-samples').hidden=!allowSamples||draft.photos.length>0;el('cinema-samples').textContent=draft.sampleIds.length?'移除占位图':'恢复占位图';
+    const clearBtn=el('cinema-clear-photos');if(clearBtn)clearBtn.hidden=!draft.photos.length&&!draft.sampleIds.length;
+    const countEl=el('cinema-photo-count');if(countEl)countEl.textContent=draft.photos.length?`已上传 ${draft.photos.length} 张`:(draft.sampleIds.length?`占位图 ${draft.sampleIds.length} 张`:'已上传 0 张');
     el('cinema-music-name').textContent=draft.music?.name||'未添加';el('cinema-music-upload').textContent=draft.music?'替换':'添加';el('cinema-music-remove').hidden=!draft.music;
   }
   function openEditor(section='photos'){if(!loaded||saving){toast('本地存储尚未就绪。');return;}pause();generation++;const value=config();draft={photos:value.photos.map(p=>({...p})),music:value.music?{...value.music}:null,sampleIds:[...value.sampleIds]};dirty=false;processing=false;el('cinema-form').inert=false;el('cinema-save').disabled=false;el('cinema-form-error').hidden=true;renderDraft();editor.showModal();el('cinema-photo-drafts').scrollLeft=0;editor.scrollTop=0;(section==='music'?el('cinema-music-upload'):el('cinema-upload')).focus();}
@@ -81,13 +129,20 @@ export function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,
   el('cinema-music-file').onchange=async()=>{
     const file=el('cinema-music-file').files[0];if(!file||!draft||processing)return;
     const token=++generation;dirty=true;processing=true;el('cinema-form').inert=true;el('cinema-save').disabled=true;el('cinema-form-error').hidden=true;
-    try{if(file.size>30*1024*1024)throw new Error('音乐超过 30 MB，请选择小一些的文件。');const fallback={mp3:'audio/mpeg',m4a:'audio/mp4',wav:'audio/wav',ogg:'audio/ogg'},type=file.type||fallback[file.name.split('.').pop().toLowerCase()];if(!['audio/mpeg','audio/mp4','audio/x-m4a','audio/wav','audio/x-wav','audio/ogg'].includes(type))throw new Error('请选择 MP3、M4A、WAV 或 OGG 音乐。');const source=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve('data:'+type+';base64,'+String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('读取音乐失败。'));reader.readAsDataURL(file);});await checkAudio(source);if(token!==generation)return;draft.music={name:file.name.slice(0,180),type,src:source};renderDraft();}
+    try{if(file.size>30*1024*1024)throw new Error('音乐超过 30 MB，请选择小一些的文件。');const fallback={mp3:'audio/mpeg',m4a:'audio/mp4',wav:'audio/wav',ogg:'audio/ogg'},type=file.type||fallback[file.name.split('.').pop().toLowerCase()];if(!['audio/mpeg','audio/mp4','audio/x-m4a','audio/wav','audio/x-wav','audio/ogg'].includes(type))throw new Error('请选择 MP3、M4A、WAV 或 OGG 音乐。');await detectHomeMode();let source;if(isHomeMode()){source=await homeUploadFile(file,'music');await checkAudio(source);}else{source=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve('data:'+type+';base64,'+String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('读取音乐失败。'));reader.readAsDataURL(file);});await checkAudio(source);}if(token!==generation)return;draft.music={name:file.name.slice(0,180),type,src:source};renderDraft();}
     catch(reason){if(token===generation)error(reason.message||'音乐处理失败。');}
     finally{if(token===generation){processing=false;el('cinema-form').inert=false;el('cinema-save').disabled=false;el('cinema-music-file').value='';}}
   };
   el('cinema-music-remove').onclick=()=>{draft.music=null;dirty=true;renderDraft();};
   el('cinema-samples').onclick=()=>{draft.sampleIds=draft.sampleIds.length?[]:[0,1,2,3,4,5];dirty=true;renderDraft();};
   el('cinema-reverse').onclick=()=>{if(!draft||processing||saving)return;sorter.reset();if(draft.photos.length)draft.photos.reverse();else draft.sampleIds.reverse();dirty=true;renderDraft();el('cinema-photo-drafts').scrollLeft=0;};
+  el('cinema-clear-photos').onclick=async()=>{
+    if(!draft||processing||saving)return;
+    if(!draft.photos.length&&!draft.sampleIds.length)return;
+    const note=draft.photos.length?`将清除清单里的 ${draft.photos.length} 张已上传照片。`:'将清除当前占位图。';
+    if(!await confirmAction('清除全部照片？',note+'保存后才会生效。','清除','取消'))return;
+    sorter.reset();draft.photos=[];draft.sampleIds=[];dirty=true;renderDraft();el('cinema-photo-drafts').scrollLeft=0;syncDraftScroll();
+  };
   el('cinema-form').onsubmit=async event=>{
     event.preventDefault();if(saving||processing||!draft)return;saving=true;el('cinema-form').inert=true;el('cinema-save').disabled=true;
     try{const next=validateRecord({id:playlistId,...draft,updatedAt:new Date().toISOString()});await saveRecord(next);record=next;index=0;dirty=false;editor.close();setMusic();dots();await Promise.all([syncCover(),show(0)]);toast('已保存');}
@@ -106,7 +161,7 @@ export function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,
     }catch(reason){if(!opened||version!==openVersion)return;console.error(reason);el('cinema-loading').hidden=false;el('cinema-loading').textContent='无法显示 3D 空间，请开启浏览器硬件加速后刷新。';}
   }
   async function close(updateURL=true){if(!opened)return true;if(editor.open&&!await closeEditor())return false;openVersion++;pause();displayVersion++;moving=false;view?.setActive(false);opened=false;page.hidden=true;if(updateURL)history.replaceState(null,'',location.pathname+location.search);onClose();return true;}
-  el('cinema-edit').onclick=el('cinema-empty-add').onclick=()=>openEditor();el('cinema-back').onclick=()=>close();el('cinema-play').onclick=()=>playing?pause():play();el('cinema-prev').onclick=()=>step(-1);el('cinema-next').onclick=()=>step(1);el('cinema-mute').onclick=()=>{muted=!muted;if(audio)audio.muted=muted;sync();};el('cinema-backup').onclick=onExport;el('cinema-import').onclick=onImport;
+  el('cinema-edit').onclick=el('cinema-empty-add').onclick=()=>openEditor();el('cinema-back').onclick=()=>close();el('cinema-play').onclick=()=>playing?pause():play();el('cinema-prev').onclick=()=>step(-1);el('cinema-next').onclick=()=>step(1);el('cinema-mute').onclick=()=>{muted=!muted;if(audio)audio.muted=muted;sync();};if(el('cinema-backup'))el('cinema-backup').onclick=onExport;if(el('cinema-import'))el('cinema-import').onclick=onImport;
   document.addEventListener('keydown',event=>{if(!opened||modalOpen()||event.altKey||event.ctrlKey||event.metaKey)return;if(event.key==='ArrowLeft'){event.preventDefault();step(-1);}if(event.key==='ArrowRight'){event.preventDefault();step(1);}if(event.code==='Space'&&event.target.tagName!=='BUTTON'){event.preventDefault();playing?pause():play();}if(event.key==='Escape')close();});
   let touch=null;el('cinema-scene').addEventListener('pointerdown',event=>{if(!swipePhotos)return;if(touch){touch=null;return;}if(event.isPrimary)touch={id:event.pointerId,x:event.clientX,y:event.clientY};});el('cinema-scene').addEventListener('pointercancel',()=>touch=null);el('cinema-scene').addEventListener('pointerup',event=>{const start=touch;touch=null;if(!start||start.id!==event.pointerId||!opened||modalOpen())return;const dx=event.clientX-start.x,dy=event.clientY-start.y;if(Math.abs(dx)>45&&Math.abs(dx)>Math.abs(dy)*1.5)step(dx<0?1:-1);});
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&opened)pause();});window.addEventListener('beforeunload',event=>{if(dirty||saving){event.preventDefault();event.returnValue='';}});

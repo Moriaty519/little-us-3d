@@ -59390,6 +59390,82 @@ function confirmAction(title,note,accept='放弃修改',cancel='继续编辑'){
   dialog.showModal();return actionPending;
 }
 function modalOpen(){return !!document.querySelector('dialog[open]');}
+
+function pad2(value){return String(value).padStart(2,'0');}
+function daysInMonth(year,month){return new Date(year,month,0).getDate();}
+function todayParts(){
+  const now=new Date();
+  return {year:now.getFullYear(),month:now.getMonth()+1,day:now.getDate()};
+}
+function parseDateValue(value){
+  const match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value||''));
+  if(!match)return null;
+  const year=+match[1],month=+match[2],day=+match[3];
+  if(month<1||month>12||day<1||day>daysInMonth(year,month))return null;
+  return {year,month,day};
+}
+
+/** Replace a native date input with year/month/day selects; keep the same element id/.value API. */
+function installDateSelect(inputOrId,{startYear=2000,endYear=null}={}){
+  const input=typeof inputOrId==='string'?document.getElementById(inputOrId):inputOrId;
+  if(!input||input.dataset.dateSelect==='1')return input;
+  const maxYear=endYear||todayParts().year+1;
+  input.dataset.dateSelect='1';
+  input.type='hidden';
+  input.removeAttribute('required');
+  const wrap=document.createElement('div');
+  wrap.className='date-parts';
+  wrap.setAttribute('role','group');
+  wrap.setAttribute('aria-label',input.getAttribute('aria-label')||'日期');
+  const year=document.createElement('select');year.className='date-year';year.setAttribute('aria-label','年');
+  const month=document.createElement('select');month.className='date-month';month.setAttribute('aria-label','月');
+  const day=document.createElement('select');day.className='date-day';day.setAttribute('aria-label','日');
+  for(let y=maxYear;y>=startYear;y--){const option=document.createElement('option');option.value=String(y);option.textContent=y+' 年';year.append(option);}
+  for(let m=1;m<=12;m++){const option=document.createElement('option');option.value=pad2(m);option.textContent=m+' 月';month.append(option);}
+  input.parentNode.insertBefore(wrap,input);
+  wrap.append(year,month,day,input);
+
+  const native=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
+  function fillDays(keepDay){
+    const y=+year.value,m=+month.value,count=daysInMonth(y,m);
+    const previous=keepDay!=null?keepDay:+day.value||1;
+    day.replaceChildren();
+    for(let d=1;d<=count;d++){const option=document.createElement('option');option.value=pad2(d);option.textContent=d+' 日';day.append(option);}
+    day.value=pad2(Math.min(previous,count));
+  }
+  function writeHidden(){
+    fillDays(+day.value||1);
+    native.set.call(input,`${year.value}-${month.value}-${day.value}`);
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+    input.dispatchEvent(new Event('change',{bubbles:true}));
+  }
+  function readHidden(value){
+    const parts=parseDateValue(value)||todayParts();
+    if(+parts.year<startYear||+parts.year>maxYear){
+      const option=document.createElement('option');option.value=String(parts.year);option.textContent=parts.year+' 年';
+      if(+parts.year>maxYear)year.prepend(option);else year.append(option);
+    }
+    year.value=String(parts.year);
+    month.value=pad2(parts.month);
+    fillDays(parts.day);
+    native.set.call(input,`${year.value}-${month.value}-${day.value}`);
+  }
+  Object.defineProperty(input,'value',{
+    configurable:true,
+    enumerable:true,
+    get(){return native.get.call(this);},
+    set(next){readHidden(next);}
+  });
+  input.focus=()=>year.focus();
+  year.addEventListener('change',writeHidden);
+  month.addEventListener('change',writeHidden);
+  day.addEventListener('change',writeHidden);
+  readHidden(native.get.call(input)||'');
+  return input;
+}
+function installDateSelects(ids=['memory-date','album-date']){
+  for(const id of ids)installDateSelect(id);
+}
 function createTapTracker({distance=7,delay=650}={}){
   let down=null;const pointers=new Set();
   return {
@@ -59543,7 +59619,101 @@ function createSageWallPanel({windowX=WALL_DECOR_LAYOUT.window.x,windowOpening=t
   return group;
 }
 
+// When the Python home server is running, all devices share the same
+// files under 小屋数据/. Otherwise the old IndexedDB path stays in use.
+let homePromise;
+let homeMode = false;
+
+function isHomeMode(){return homeMode;}
+
+function detectHomeMode(){
+  if(homePromise)return homePromise;
+  homePromise = fetch('/api/health', {cache:'no-store'})
+    .then(async response=>{
+      if(!response.ok)return false;
+      const data = await response.json().catch(()=>null);
+      homeMode = !!(data && data.ok && data.mode === 'home');
+      return homeMode;
+    })
+    .catch(()=>{homeMode=false;return false;});
+  return homePromise;
+}
+
+async function api(path, options){
+  const response = await fetch(path, {cache:'no-store', ...options});
+  let data = null;
+  try{data = await response.json();}catch{}
+  if(!response.ok)throw new Error((data && data.error) || '家庭小屋服务暂时不可用，请确认电脑端已启动。');
+  return data;
+}
+
+async function homeList(collection){
+  return api(`/api/store/${collection}`);
+}
+
+async function homeGet(collection, id){
+  try{
+    return await api(`/api/store/${collection}/${encodeURIComponent(id)}`);
+  }catch(error){
+    if(String(error.message).includes('not found'))return undefined;
+    throw error;
+  }
+}
+
+async function homePut(collection, record){
+  if(!record || typeof record.id !== 'string')throw new Error('记录格式不正确。');
+  return api(`/api/store/${collection}/${encodeURIComponent(record.id)}`, {
+    method:'PUT',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(record)
+  });
+}
+
+async function homeRemove(collection, id){
+  return api(`/api/store/${collection}/${encodeURIComponent(id)}`, {method:'DELETE'});
+}
+
+async function homeUploadDataUrl(dataUrl, kind='photos'){
+  const data = await api('/api/media', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({kind, dataUrl})
+  });
+  if(!data?.url)throw new Error('上传失败，请重试。');
+  return data.url;
+}
+
+async function homeUploadFile(file, kind='photos'){
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunk = 0x8000;
+  for(let i=0;i<bytes.length;i+=chunk)binary += String.fromCharCode(...bytes.subarray(i, i+chunk));
+  const data = await api('/api/media', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      kind,
+      filename:file.name||'',
+      contentType:file.type||'',
+      base64:btoa(binary)
+    })
+  });
+  if(!data?.url)throw new Error('上传失败，请重试。');
+  return data.url;
+}
+
+function isMediaRef(value, kind='image'){
+  if(typeof value !== 'string' || !value)return false;
+  if(value.startsWith('/media/') && value.length < 500)return true;
+  if(kind === 'image')return value.length <= 6_000_000 && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value);
+  if(kind === 'audio')return value.length <= 43_000_000 && /^data:audio\/[a-z0-9+-]+;base64,[A-Za-z0-9+/=]+$/.test(value);
+  if(kind === 'video')return /^data:video\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/.test(value);
+  return false;
+}
+
 // IndexedDB keeps compressed photographs out of localStorage's small quota.
+// When the home server is up, records live in 小屋数据/ instead.
 let dbPromise;
 function memoryDatabase() {
   if (!dbPromise) dbPromise = new Promise((resolve,reject)=>{
@@ -59566,21 +59736,39 @@ async function memoryTransaction(mode, operation, storeName='memories') {
     transaction.onabort=()=>reject(transaction.error||new Error('保存中断，请重试。'));
   });
 }
-async function memoryLoad(){return await memoryTransaction('readonly',store=>store.getAll());}
-async function memorySave(record){await memoryTransaction('readwrite',store=>store.put(record));}
-async function memoryRemove(id){await memoryTransaction('readwrite',store=>store.delete(id));}
-async function memorySaveBatch(records){await memoryTransaction('readwrite',store=>{for(const record of records)store.put(record);});}
+async function memoryLoad(){
+  await detectHomeMode();
+  if(isHomeMode())return await homeList('memories');
+  return await memoryTransaction('readonly',store=>store.getAll());
+}
+async function memorySave(record){
+  await detectHomeMode();
+  if(isHomeMode()){await homePut('memories',record);return;}
+  await memoryTransaction('readwrite',store=>store.put(record));
+}
+async function memoryRemove(id){
+  await detectHomeMode();
+  if(isHomeMode()){await homeRemove('memories',id);return;}
+  await memoryTransaction('readwrite',store=>store.delete(id));
+}
+async function memorySaveBatch(records){
+  await detectHomeMode();
+  if(isHomeMode()){for(const record of records)await homePut('memories',record);return;}
+  await memoryTransaction('readwrite',store=>{for(const record of records)store.put(record);});
+}
 function validBackup(data){
   if(data?.format!=='little-us-backup'||data.version!==1||!Array.isArray(data.memories)||data.memories.length>1000)throw new Error('这不是有效的小屋备份文件。');
   const ids=new Set();
   const objectIds=['guitar','studio','screen','bird','photos','sofa','vase'];
   const records=data.memories.map(m=>{
     if(!m||typeof m.id!=='string'||!m.id||m.id.length>120||ids.has(m.id)||typeof m.title!=='string'||!m.title.trim()||m.title.length>60||typeof m.note!=='string'||m.note.length>2000||!objectIds.includes(m.objectId)||typeof m.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(m.date)||!Number.isFinite(Date.parse(m.date))||new Date(m.date).toISOString().slice(0,10)!==m.date||typeof m.createdAt!=='string'||!Number.isFinite(Date.parse(m.createdAt))||typeof m.updatedAt!=='string'||!Number.isFinite(Date.parse(m.updatedAt)))throw new Error('备份内容不完整，尚未导入任何回忆。');
-    if(m.photo!==null&&(typeof m.photo!=='string'||m.photo.length>6_000_000||!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(m.photo)))throw new Error('备份中的照片格式不正确。');
+    if(m.photo!==null&&!isMediaRef(m.photo,'image'))throw new Error('备份中的照片格式不正确。');
     ids.add(m.id);return {id:m.id,title:m.title,note:m.note,objectId:m.objectId,date:m.date,photo:m.photo,createdAt:m.createdAt,updatedAt:m.updatedAt};
   });
   return records;
 }
+
+{ homeGet, homeList, homePut, homeRemove, isHomeMode, detectHomeMode, isMediaRef };
 
 const ALBUM_TEMPLATES={
   daily:{name:'日常拼接',capacity:3,noteWidth:335,noteSize:19,noteLines:4},
@@ -59595,11 +59783,11 @@ const ALBUM_TEMPLATES={
 };
 // Public choices are restricted; older stored layouts remain readable and importable.
 const ALBUM_TEMPLATE_CHOICES=['letter','anniversary','daily','quad','five','six'];
-async function albumLoad(){return await memoryTransaction('readonly',s=>s.getAll(),'albums');}
-async function albumSave(record){await memoryTransaction('readwrite',s=>s.put(record),'albums');}
-async function albumRemove(id){await memoryTransaction('readwrite',s=>s.delete(id),'albums');}
-async function albumSamplesHidden(){return !!(await memoryTransaction('readonly',s=>s.get('album-hide-samples'),'settings'))?.value;}
-async function hideAlbumSamples(value){await memoryTransaction('readwrite',s=>s.put({id:'album-hide-samples',value:!!value}),'settings');}
+async function albumLoad(){await detectHomeMode();if(isHomeMode())return await homeList('albums');return await memoryTransaction('readonly',s=>s.getAll(),'albums');}
+async function albumSave(record){await detectHomeMode();if(isHomeMode()){await homePut('albums',record);return;}await memoryTransaction('readwrite',s=>s.put(record),'albums');}
+async function albumRemove(id){await detectHomeMode();if(isHomeMode()){await homeRemove('albums',id);return;}await memoryTransaction('readwrite',s=>s.delete(id),'albums');}
+async function albumSamplesHidden(){await detectHomeMode();if(isHomeMode())return !!(await homeGet('settings','album-hide-samples'))?.value;return !!(await memoryTransaction('readonly',s=>s.get('album-hide-samples'),'settings'))?.value;}
+async function hideAlbumSamples(value){await detectHomeMode();if(isHomeMode()){await homePut('settings',{id:'album-hide-samples',value:!!value});return;}await memoryTransaction('readwrite',s=>s.put({id:'album-hide-samples',value:!!value}),'settings');}
 function validAlbums(records){
   if(!Array.isArray(records)||records.length>1000)throw new Error('相册最多保存 1000 个故事，尚未导入任何内容。');
   const ids=new Set();
@@ -59607,7 +59795,7 @@ function validAlbums(records){
     if(!r||typeof r.id!=='string'||!r.id||r.id.length>120||ids.has(r.id)||!Object.hasOwn(ALBUM_TEMPLATES,r.template)||typeof r.title!=='string'||r.title.length>60||typeof r.note!=='string'||r.note.length>4000||typeof r.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(r.date)||!Number.isFinite(Date.parse(r.date))||new Date(r.date).toISOString().slice(0,10)!==r.date||typeof r.createdAt!=='string'||!Number.isFinite(Date.parse(r.createdAt))||typeof r.updatedAt!=='string'||!Number.isFinite(Date.parse(r.updatedAt)))throw new Error('相册故事格式不完整，尚未导入任何内容。');
     if(!Array.isArray(r.photos)||r.photos.length>24)throw new Error('每个相册故事最多 24 张照片。');
     const photos=r.photos.map(p=>{
-      if(!p||typeof p.src!=='string'||p.src.length>6_000_000||!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p.src)||!p.crop||!Number.isFinite(p.crop.x)||p.crop.x<0||p.crop.x>1||!Number.isFinite(p.crop.y)||p.crop.y<0||p.crop.y>1||!Number.isFinite(p.crop.zoom)||p.crop.zoom<1||p.crop.zoom>3)throw new Error('相册照片或裁切参数不正确，尚未导入任何内容。');
+      if(!p||!isMediaRef(p.src,'image')||!p.crop||!Number.isFinite(p.crop.x)||p.crop.x<0||p.crop.x>1||!Number.isFinite(p.crop.y)||p.crop.y<0||p.crop.y>1||!Number.isFinite(p.crop.zoom)||p.crop.zoom<1||p.crop.zoom>3)throw new Error('相册照片或裁切参数不正确，尚未导入任何内容。');
       return {src:p.src,crop:{x:p.crop.x,y:p.crop.y,zoom:p.crop.zoom}};
     });ids.add(r.id);
     return {id:r.id,date:r.date,title:r.title,note:r.note,template:r.template,photos,createdAt:r.createdAt,updatedAt:r.updatedAt};
@@ -59621,23 +59809,28 @@ function validCinema(record){
   if(!record||record.id!=='cinema-playlist'||typeof record.updatedAt!=='string'||!Number.isFinite(Date.parse(record.updatedAt))||!Array.isArray(record.photos)||record.photos.length>CINEMA_PHOTO_LIMIT||!Array.isArray(record.sampleIds)||record.sampleIds.length>6||record.sampleIds.some(i=>!Number.isInteger(i)||i<0||i>5)||new Set(record.sampleIds).size!==record.sampleIds.length)throw new Error('放映清单格式不正确，尚未导入任何内容。');
   const ids=new Set();let bytes=0;
   const photos=record.photos.map(p=>{
-    if(!p||typeof p.id!=='string'||!p.id||p.id.length>120||ids.has(p.id)||typeof p.src!=='string'||p.src.length>6_000_000||!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p.src))throw new Error('影院照片格式不正确。');
-    ids.add(p.id);bytes+=p.src.length;return {id:p.id,src:p.src};
+    if(!p||typeof p.id!=='string'||!p.id||p.id.length>120||ids.has(p.id)||!isMediaRef(p.src,'image'))throw new Error('影院照片格式不正确。');
+    ids.add(p.id);bytes+=p.src.startsWith('/media/')?0:p.src.length;return {id:p.id,src:p.src};
   });
   let music=null;
-  if(record.music!==null){const m=record.music;if(!m||typeof m.name!=='string'||!m.name||m.name.length>180||!CINEMA_AUDIO_TYPES.includes(m.type)||typeof m.src!=='string'||m.src.length>43_000_000||!m.src.startsWith('data:'+m.type+';base64,')||!/^data:audio\/[a-z0-9-]+;base64,[A-Za-z0-9+/=]+$/.test(m.src))throw new Error('影院音乐格式不正确。');music={name:m.name,type:m.type,src:m.src};bytes+=m.src.length;}
+  if(record.music!==null){
+    const m=record.music;
+    const okHome=m&&typeof m.name==='string'&&m.name&&m.name.length<=180&&CINEMA_AUDIO_TYPES.includes(m.type)&&isMediaRef(m.src,'audio');
+    const okLegacy=okHome&&(m.src.startsWith('/media/')||(m.src.startsWith('data:'+m.type+';base64,')&&m.src.length<=43_000_000));
+    if(!okLegacy)throw new Error('影院音乐格式不正确。');
+    music={name:m.name,type:m.type,src:m.src};bytes+=m.src.startsWith('/media/')?0:m.src.length;
+  }
   if(bytes>140*1024*1024)throw new Error('放映清单过大，请减少照片或音乐文件大小。');
   return {id:'cinema-playlist',photos,music,sampleIds:[...record.sampleIds],updatedAt:record.updatedAt};
 }
-async function cinemaLoad(){const record=await memoryTransaction('readonly',s=>s.get('cinema-playlist'),'settings');return record?validCinema(record):null;}
-async function cinemaSave(record){await memoryTransaction('readwrite',s=>s.put(validCinema(record)),'settings');}
+async function cinemaLoad(){await detectHomeMode();const record=isHomeMode()?await homeGet('settings','cinema-playlist'):await memoryTransaction('readonly',s=>s.get('cinema-playlist'),'settings');return record?validCinema(record):null;}
+async function cinemaSave(record){await detectHomeMode();const value=validCinema(record);if(isHomeMode()){await homePut('settings',value);return;}await memoryTransaction('readwrite',s=>s.put(value),'settings');}
 function mergeCinema(current,incoming){if(!incoming)return current;if(!current||Date.parse(incoming.updatedAt)>Date.parse(current.updatedAt))return incoming;return current;}
 
 const VIDEO_TYPE=/^video\/[a-z0-9.+-]+$/;
-const VIDEO_DATA=/^data:video\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/;
 
-// The KTV keeps exactly one local video. The data URL lives in the existing
-// settings record so the unified JSON backup still carries it.
+// The KTV keeps exactly one local video. On the home server the file lives in
+// 小屋数据/视频/; offline mode still stores a data URL in IndexedDB.
 function validKtv(record){
   if(record===null)return null;
   if(!record||record.id!=='ktv-playlist'||typeof record.updatedAt!=='string'||!Number.isFinite(Date.parse(record.updatedAt)))throw new Error('KTV 内容格式不正确。');
@@ -59645,7 +59838,7 @@ function validKtv(record){
   if(record.video!==undefined&&record.video!==null){
     const item=record.video,type=String(item.type||'');
     if(typeof item.name!=='string'||!item.name.trim()||item.name.length>180||!VIDEO_TYPE.test(type))throw new Error('KTV 视频格式不正确。');
-    if(typeof item.src!=='string'||!item.src.startsWith('data:'+type+';base64,')||!VIDEO_DATA.test(item.src))throw new Error('KTV 视频内容不完整。');
+    if(!isMediaRef(item.src,'video')||(item.src.startsWith('data:')&&!item.src.startsWith('data:'+type+';base64,')))throw new Error('KTV 视频内容不完整。');
     video={name:item.name.trim().slice(0,180),type,src:item.src};
     if(Number.isFinite(item.size)&&item.size>0)video.size=item.size;
     if(Number.isFinite(item.duration)&&item.duration>0)video.duration=item.duration;
@@ -59656,8 +59849,8 @@ function validKtv(record){
   }
   return {id:'ktv-playlist',video,updatedAt:record.updatedAt};
 }
-async function ktvLoad(){const record=await memoryTransaction('readonly',s=>s.get('ktv-playlist'),'settings');return record?validKtv(record):null;}
-async function ktvSave(record){await memoryTransaction('readwrite',s=>s.put(validKtv(record)),'settings');}
+async function ktvLoad(){await detectHomeMode();const record=isHomeMode()?await homeGet('settings','ktv-playlist'):await memoryTransaction('readonly',s=>s.get('ktv-playlist'),'settings');return record?validKtv(record):null;}
+async function ktvSave(record){await detectHomeMode();const value=validKtv(record);if(isHomeMode()){await homePut('settings',value);return;}await memoryTransaction('readwrite',s=>s.put(value),'settings');}
 
 const CITY_BY_ID=new Map(CHINA_CITIES.map(city=>[city.id,city]));
 function cityName(city){return city.name.replace(/(?:白族|傣族|傈僳族|藏族|哈尼族|彝族|壮族|苗族|侗族|布依族|羌族|土家族|朝鲜族|景颇族|哈萨克|回族|蒙古族|蒙古|柯尔克孜|撒拉族|土族)+自治州$/,'').replace(/(?:市|特别行政区)$/,'');}
@@ -59667,16 +59860,16 @@ function findCities(query){
   return CHINA_CITIES.filter(c=>(c.province+c.name).includes(q)||c.name.includes(q))
     .sort((a,b)=>(cityName(a)===q?-1:0)-(cityName(b)===q?-1:0)||a.name.localeCompare(b.name,'zh-CN')).slice(0,30);
 }
-async function journeyLoad(){return await memoryTransaction('readonly',s=>s.getAll(),'journeys');}
-async function journeySave(record){await memoryTransaction('readwrite',s=>s.put(record),'journeys');}
-async function journeyRemove(id){await memoryTransaction('readwrite',s=>s.delete(id),'journeys');}
+async function journeyLoad(){await detectHomeMode();if(isHomeMode())return await homeList('journeys');return await memoryTransaction('readonly',s=>s.getAll(),'journeys');}
+async function journeySave(record){await detectHomeMode();if(isHomeMode()){await homePut('journeys',record);return;}await memoryTransaction('readwrite',s=>s.put(record),'journeys');}
+async function journeyRemove(id){await detectHomeMode();if(isHomeMode()){await homeRemove('journeys',id);return;}await memoryTransaction('readwrite',s=>s.delete(id),'journeys');}
 function validJourneys(records){
   if(!Array.isArray(records))throw new Error('足迹备份格式不正确。');
   if(records.length>2000)throw new Error('足迹最多保存 2000 段，尚未导入任何记录。');
   const ids=new Set();
   return records.map(r=>{
     if(!r||typeof r.id!=='string'||!r.id||r.id.length>120||ids.has(r.id)||!CITY_BY_ID.has(r.cityId)||typeof r.title!=='string'||r.title.length>60||typeof r.note!=='string'||r.note.length>4000||typeof r.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(r.date)||!Number.isFinite(Date.parse(r.date))||new Date(r.date).toISOString().slice(0,10)!==r.date||typeof r.createdAt!=='string'||!Number.isFinite(Date.parse(r.createdAt))||typeof r.updatedAt!=='string'||!Number.isFinite(Date.parse(r.updatedAt)))throw new Error('足迹内容不完整，尚未导入任何记录。');
-    if(!Array.isArray(r.photos)||r.photos.length>36||r.photos.some(p=>typeof p!=='string'||p.length>6_000_000||!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p)))throw new Error('足迹照片格式不正确，每个城市最多 36 张。');
+    if(!Array.isArray(r.photos)||r.photos.length>36||r.photos.some(p=>!isMediaRef(p,'image')))throw new Error('足迹照片格式不正确，每个城市最多 36 张。');
     ids.add(r.id);
     return {id:r.id,cityId:r.cityId,title:r.title,date:r.date,note:r.note,photos:[...r.photos],createdAt:r.createdAt,updatedAt:r.updatedAt};
   });
@@ -59699,6 +59892,13 @@ async function saveFullBackup(memories,journeys,albums=[],cinema=undefined,ktv=u
   validAlbums(albums);
   if(cinema!==undefined)validCinema(cinema);
   if(ktv!==undefined)validKtv(ktv);
+  await detectHomeMode();
+  if(isHomeMode()){
+    const response=await fetch('/api/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({memories,journeys,albums,cinema,ktv})});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error||'导入失败，请重试。');
+    return;
+  }
   const db=await memoryDatabase();
   await new Promise((resolve,reject)=>{
     const tx=db.transaction(['memories','journeys','albums',...((cinema||ktv)?['settings']:[])],'readwrite');
@@ -61000,8 +61200,8 @@ function createRoom(container, onSelect, {projection=false}={}) {
   const sharedMap=createChinaMapModel(),map=sharedMap.group,mapPlane=sharedMap.face;
   map.position.set(-4.39,2.82,1.05);map.rotation.y=Math.PI/2;room.add(map);objects.push(map);
 
-  // A little wooden birdhouse; the bird is the tour guide, not a memory entry.
-  const bird=group(room,3.65,FLOOR,2.60);bird.rotation.y=-.18;bird.name='Little wooden birdhouse';
+  // Birdhouse holds memories; the perched bird stays the tour guide and wins overlapping picks.
+  const bird=group(room,3.65,FLOOR,2.60,'bird');bird.rotation.y=-.18;bird.name='Little wooden birdhouse';
   // Wooden pedestal and upright support beneath the house.
   cyl(bird,0,.055,0,.33,.38,.1,'#d9c19b');box(bird,0,.59,0,.075,1.1,.075,'#bea57e',.014);
   const house=group(bird,0,1.13,0);
@@ -61046,9 +61246,35 @@ function createRoom(container, onSelect, {projection=false}={}) {
     furniture:featureFurniture,floor:[floorBase,floorTop],texture:canvasTexture});
 
   const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();const tap=createTapTracker({distance:6});let hoverId=null;
-  function hit(event){camera.updateMatrixWorld();const rect=renderer.domElement.getBoundingClientRect();pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);raycaster.setFromCamera(pointer,camera);const hits=raycaster.intersectObjects(room.children,true);for(const h of hits){let obj=h.object;while(obj&&obj!==room){if(obj===birdCharacter.group)return {userData:{objectId:'bird',action:'bird-tour'}};if(obj.userData.objectId)return obj;obj=obj.parent;} // Furniture behind a wall is not clickable.
-      if(h.object.material&&h.object.material.transparent!==true)return null;
-    }return null;}
+  function hit(event){
+    camera.updateMatrixWorld();
+    const rect=renderer.domElement.getBoundingClientRect();
+    pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);
+    raycaster.setFromCamera(pointer,camera);
+    const hits=raycaster.intersectObjects(room.children,true);
+    // Within a small depth band, bird beats birdhouse so overlapping clicks start the tour.
+    const near=hits[0]?hits[0].distance+.12:0;
+    let houseHit=null;
+    for(const h of hits){
+      let obj=h.object,picked=null,isBird=false;
+      while(obj&&obj!==room){
+        if(obj===birdCharacter.group){isBird=true;break;}
+        if(obj.userData.objectId){picked=obj;break;}
+        obj=obj.parent;
+      }
+      if(isBird&&h.distance<=near)return {userData:{objectId:'bird',action:'bird-tour'}};
+      if(picked){
+        if(picked.userData.objectId==='bird'){if(h.distance<=near)houseHit=houseHit||picked;continue;}
+        return picked;
+      }
+      // Furniture behind a wall is not clickable.
+      if(h.object.material&&h.object.material.transparent!==true){
+        if(h.distance<=near&&!houseHit)return null;
+        if(h.distance>near)return houseHit;
+      }
+    }
+    return houseHit;
+  }
   renderer.domElement.addEventListener('pointerdown',e=>{if(interactive)tap.begin(e);});
   renderer.domElement.addEventListener('pointerup',e=>{if(interactive&&tap.end(e)){const obj=hit(e);if(obj){selectObject(obj.userData.objectId);onSelect(obj.userData.objectId,{action:obj.userData.action});}}});
   renderer.domElement.addEventListener('pointercancel',e=>tap.cancel(e));
@@ -61923,7 +62149,7 @@ function createTravelScene(container,onSelect,onFocusChange=()=>{}){
   renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setClearColor(0,0);
   renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-  renderer.domElement.setAttribute('aria-label','挂在墙上的中国足迹地图，点击青岛进入微缩场景');
+  renderer.domElement.setAttribute('aria-label','挂在墙上的中国足迹地图，点击已有足迹的城市查看照片');
   container.prepend(renderer.domElement);
   const labels=document.createElement('div');labels.className='travel-labels';container.append(labels);
   const leaders=document.createElementNS('http://www.w3.org/2000/svg','svg');leaders.classList.add('travel-label-leaders');leaders.setAttribute('aria-hidden','true');labels.append(leaders);
@@ -61970,7 +62196,8 @@ function createTravelScene(container,onSelect,onFocusChange=()=>{}){
 
   function rebuild(){
     sceneDirty=true;labelsDirty=true;measureLabels=true;hovered=null;markers.clear();labels.replaceChildren(leaders);leaders.replaceChildren();labelEntries=[];
-    const displayed=new Map(counts);if(!displayed.has(QINGDAO_ID))displayed.set(QINGDAO_ID,0);
+    const displayed=new Map(counts);
+    if(!displayed.has(QINGDAO_ID))displayed.set(QINGDAO_ID,0);
     for(const id of MODEL_CITY_IDS)if(!displayed.has(id))displayed.set(id,0);
     if(preview&&!displayed.has(preview))displayed.set(preview,0);
     for(const [id,count] of displayed){
@@ -61978,8 +62205,8 @@ function createTravelScene(container,onSelect,onFocusChange=()=>{}){
       const landmark=id===QINGDAO_ID||MODEL_CITY_IDS.includes(id);
       const g=marker(markers,0,0,landmark?landmarkMat:lightMat);g.userData.cityId=id;
       const local=model.point(city.lon,city.lat);g.position.set(local.x,local.y,local.z);
-      const button=document.createElement('button');button.className='travel-city-label';button.textContent=cityName(city)+(landmark||count?'':' · 待保存');
-      button.setAttribute('aria-label',landmark?(count?`${cityName(city)}，${count} 段回忆，点击进入微缩场景`:`${cityName(city)}，微缩场景`):(count?`${cityName(city)}，${count} 段回忆`:`${cityName(city)}，待保存地点`));
+      const button=document.createElement('button');button.className='travel-city-label';button.textContent=cityName(city)+(count||landmark?'':' · 待保存');
+      button.setAttribute('aria-label',count?`${cityName(city)}，点击查看照片`:`${cityName(city)}，还未上传照片`);
       button.disabled=!count&&!landmark;button.onclick=()=>onSelect(id);labels.append(button);button.dataset.cityId=id;
       button.onfocus=()=>{focused=id;labelsDirty=true;};button.onblur=()=>{focused=null;labelsDirty=true;};
       const line=document.createElementNS('http://www.w3.org/2000/svg','line');leaders.append(line);
@@ -62243,16 +62470,13 @@ function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
     {id:'632800',name:'海西',province:'青海省',lonlat:[97.3708,37.3747],src:'地图/海西/haixi.html'}
   ];
   const isModelCity=id=>CITY_SCENES.some(scene=>scene.id===id);
-  function focusQingdao(){
-    if(!opened)return;
-    const scene=CITY_SCENES.find(s=>s.id===QINGDAO_ID);
-    if(scene)openCityScene(scene);
-  }
+  let sceneReturnCity=null;
   function openCityScene(scene){
+    sceneReturnCity=boardCity||scene.id;
     closePhotoBoard();closeDrawer();let layer=el('city-scene-layer');
     if(!layer){
       layer=document.createElement('div');layer.id='city-scene-layer';layer.className='city-scene-layer';layer.hidden=true;
-      const close=document.createElement('button');close.type='button';close.className='city-scene-back';close.textContent='← 返回地图';close.setAttribute('aria-label','返回地图');close.onclick=()=>closeCityScene();
+      const close=document.createElement('button');close.type='button';close.className='city-scene-back';close.textContent='← 返回照片墙';close.setAttribute('aria-label','返回照片墙');close.onclick=()=>closeCityScene();
       const frame=document.createElement('iframe');frame.className='city-scene-frame';frame.setAttribute('allow','fullscreen');frame.setAttribute('title','城市微缩场景');
       frame.addEventListener('load',()=>{
         try{
@@ -62263,6 +62487,9 @@ function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
         }catch(e){}
       });
       layer.append(frame,close);page.append(layer);
+    }else{
+      const close=layer.querySelector('.city-scene-back');
+      if(close){close.textContent='← 返回照片墙';close.setAttribute('aria-label','返回照片墙');}
     }
     const show=()=>{
       layer.hidden=false;
@@ -62276,10 +62503,12 @@ function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
     const layer=el('city-scene-layer');if(!layer)return;
     layer.hidden=true;const frame=layer.querySelector('iframe');frame.src='about:blank';frame.dataset.src='';
     view?.exitDiorama();
+    const returnId=sceneReturnCity;sceneReturnCity=null;
+    if(returnId)openPhotoBoard(returnId);
   }
   window.addEventListener('keydown',e=>{if(e.key==='Escape'&&!el('city-scene-layer')?.hidden)closeCityScene();});
 
-  /* ---------- polaroid board for cities without a 3D scene ---------- */
+  /* ---------- polaroid board — entry for every city ---------- */
   let boardLayer=null,boardCity=null;
   function openPhotoBoard(id){
     const city=CITY_BY_ID.get(id);if(!city)return;
@@ -62287,7 +62516,6 @@ function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
     for(const record of sorted(records.filter(r=>r.cityId===id))){
       (record.photos||[]).forEach((photo,index)=>items.push({photo,record,index}));
     }
-    if(!items.length){showCity(id,true,true);return;}
     boardCity=id;
     if(!boardLayer){
       boardLayer=document.createElement('div');boardLayer.className='photo-board-layer';boardLayer.hidden=true;
@@ -62299,14 +62527,21 @@ function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
       edit.innerHTML='<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.6 14.4 4.5 10.7 12.8 2.4a1.5 1.5 0 0 1 2.1 0l1.6 1.6a1.5 1.5 0 0 1 0 2.1l-8.3 8.3-3.8.9z"/><path d="m11.2 4 3.9 3.9"/></svg>';
       edit.onclick=e=>{e.stopPropagation();const cid=boardCity;closePhotoBoard();openCityEdit(cid);};
       head.append(date,edit);
-      boardLayer.append(back,head,board);page.append(boardLayer);
-      boardLayer._board=board;boardLayer._date=date;
+      const model=document.createElement('button');model.type='button';model.className='photo-board-model';model.setAttribute('aria-label','进入微缩场景');model.hidden=true;
+      model.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 3.8 8v8L12 20.8 20.2 16V8L12 3.2z"/><path d="M12 12.4 3.8 8M12 12.4l8.2-4.4M12 12.4V20.8"/></svg>';
+      model.onclick=e=>{e.stopPropagation();const scene=CITY_SCENES.find(s=>s.id===boardCity);if(scene)openCityScene(scene);};
+      boardLayer.append(back,head,board,model);page.append(boardLayer);
+      boardLayer._board=board;boardLayer._date=date;boardLayer._model=model;
       boardLayer.onclick=()=>closePhotoBoard();
     }
     boardLayer._items=items;
-    if(boardLayer._date)boardLayer._date.textContent=(items[0]?.record?.date||'').replaceAll('-','.');
+    if(boardLayer._date)boardLayer._date.textContent=cityName(city);
     const board=boardLayer._board;board.replaceChildren();
-    items.forEach((item,index)=>{
+    if(!items.length){
+      const empty=document.createElement('p');empty.className='photo-board-empty';empty.textContent='还未上传照片';
+      empty.onclick=e=>e.stopPropagation();
+      board.append(empty);
+    }else items.forEach((item,index)=>{
       const card=document.createElement('div');card.className='board-card';
       card.style.setProperty('--photo-rot',(((index%5)-2)*1.6)+'deg');
       const img=document.createElement('img');img.src=item.photo;img.alt='';img.loading='lazy';card.append(img);
@@ -62319,6 +62554,9 @@ function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
       card.onclick=e=>{e.stopPropagation();showPhoto(item.record,item.index);};
       board.append(card);
     });
+    const scene=CITY_SCENES.find(s=>s.id===id);
+    boardLayer.classList.toggle('has-model',!!scene);
+    if(boardLayer._model){boardLayer._model.hidden=!scene;if(scene)boardLayer._model.setAttribute('aria-label',`进入${scene.name}微缩场景`);}
     boardLayer.hidden=false;
     cityId=id;recordId=null;view?.select(id);
   }
@@ -62340,7 +62578,7 @@ function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
   function closePhotoBoard(){if(!boardLayer)return;boardLayer.hidden=true;boardCity=null;cityId=null;view?.select(null);}
   window.addEventListener('keydown',e=>{if(e.key==='Escape'&&boardLayer&&!boardLayer.hidden)closePhotoBoard();});
 
-  function update(refreshMap=true){if(refreshMap)view?.setRecords(records.filter(r=>!isModelCity(r.cityId)));}
+  function update(refreshMap=true){if(refreshMap)view?.setRecords(records);}
   function resetForm(){generation++;processing=false;dirty=false;draftPhotos=[];editingId=null;chosenCity=null;cityEditId=null;
     el('journey-photos').value='';el('journey-city-options').hidden=true;el('journey-city').setAttribute('aria-expanded','false');
     el('journey-city').disabled=false;el('travel-form-view').classList.remove('city-photo-edit');el('journey-delete').hidden=true;view?.setPreview(null);}
@@ -62348,10 +62586,8 @@ function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
   async function showCity(id,skipGuard=false){
     if(!skipGuard&&!await guard())return;
     const city=CITY_BY_ID.get(id);if(!city)return;
-    const scene=CITY_SCENES.find(s=>s.id===id);if(scene){openCityScene(scene);return;}
-    closePhotoBoard();
-    if(records.some(r=>r.cityId===id&&r.photos&&r.photos.length)){openPhotoBoard(id);return;}
-    openForm(id);
+    closeDrawer();
+    openPhotoBoard(id);
   }
   function showPhoto(record,index){
     const dialog=el('travel-lightbox');dialog._record=record;dialog._index=index;renderPhoto();dialog.showModal();
@@ -62362,11 +62598,8 @@ function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
     const city=CITY_BY_ID.get(cityId);if(!city)return;
     const entries=sorted(records.filter(r=>r.cityId===cityId));el('travel-city-title').textContent=cityName(city);
     const photoTotal=entries.reduce((n,r)=>n+((r.photos&&r.photos.length)||0),0);
-    el('travel-city-meta').textContent=`${city.province} · ${photoTotal} 张照片${cityId===QINGDAO_ID?' · 微缩场景':''}`;
+    el('travel-city-meta').textContent=`${city.province} · ${photoTotal} 张照片${isModelCity(cityId)?' · 微缩场景':''}`;
     const detail=el('travel-record-detail'),list=el('travel-record-list');detail.replaceChildren();list.replaceChildren();
-    if(cityId===QINGDAO_ID){const cta=action(detail,'进入微缩场景',()=>focusQingdao(),'travel-primary travel-diorama-cta');cta.setAttribute('aria-label','进入青岛微缩场景');}
-    const cityScene=CITY_SCENES.find(s=>s.id===cityId);
-    if(cityScene){const cta=action(detail,'进入微缩场景',()=>openCityScene(cityScene),'travel-primary travel-diorama-cta');cta.setAttribute('aria-label',`进入${cityScene.name}微缩场景`);}
     if(!entries.length){make(detail,'p','这里还没有回忆。给这座城市留下一段我们的故事吧。','travel-empty');return;}
     const record=entries.find(r=>r.id===recordId)||entries[0];recordId=record.id;
     const article=make(detail,'article',undefined,'travel-record-detail');const date=make(article,'time',record.date.replaceAll('-','.'));date.dateTime=record.date;
@@ -62383,16 +62616,19 @@ function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
   }
   function chooseCity(city){chosenCity=city;el('journey-city').value=city.province+' · '+cityName(city);el('journey-city-options').hidden=true;el('journey-city').setAttribute('aria-expanded','false');view?.setPreview(city.id);dirty=true;}
   function suggestions(){
-    chosenCity=null;view?.setPreview(null);const query=el('journey-city').value,list=el('journey-city-options');list.replaceChildren();const results=findCities(query).filter(city=>!isModelCity(city.id));list.hidden=!query.trim();el('journey-city').setAttribute('aria-expanded',String(!list.hidden));
-    
-    if(query.trim()&&!results.length)make(list,'p','未找到城市，请尝试完整城市名。');
-    for(const city of results){const option=action(list,city.province+' · '+cityName(city),()=>{chooseCity(city);el('journey-date').focus();});option.setAttribute('role','option');option.tabIndex=-1;}
+    chosenCity=null;view?.setPreview(null);const query=el('journey-city').value,list=el('journey-city-options');list.replaceChildren();
+    const taken=new Set(records.map(r=>r.cityId));
+    const results=findCities(query).filter(city=>!taken.has(city.id));
+    list.hidden=!query.trim();el('journey-city').setAttribute('aria-expanded',String(!list.hidden));
+    if(query.trim()&&!results.length)make(list,'p',taken.size&&findCities(query).some(c=>taken.has(c.id))?'该城市已有足迹，请从地图点开后编辑。':'未找到城市，请尝试完整城市名。');
+    for(const city of results){const option=action(list,city.province+' · '+cityName(city),()=>{chooseCity(city);el('journey-upload').focus();});option.setAttribute('role','option');option.tabIndex=-1;}
   }
+  function todayDate(){return new Date().toLocaleDateString('sv-SE');}
   function draftPreviews(){const list=el('journey-photo-previews');list.replaceChildren();draftPhotos.forEach((photo,index)=>{const figure=make(list,'figure');const img=make(figure,'img');img.src=photo;img.alt=`待保存照片 ${index+1}`;const remove=action(figure,'×',()=>{draftPhotos.splice(index,1);dirty=true;draftPreviews();});remove.setAttribute('aria-label',`移除第 ${index+1} 张待保存照片`);remove.disabled=processing;});}
   async function openForm(id=null,record=null){
     if(!await guard())return;if(!loaded){toast('浏览器存储不可用或尚未准备好，请稍后重试。');return;}
     closePhotoBoard();resetForm();form.reset();cityId=null;editingId=record?.id||null;chosenCity=CITY_BY_ID.get(record?.cityId||id)||null;draftPhotos=[...(record?.photos||[])];
-    el('journey-date').value=record?.date||new Date().toLocaleDateString('sv-SE');el('journey-title').value=record?.title||'';el('journey-note').value=record?.note||'';el('journey-error').hidden=true;el('journey-save').disabled=false;el('journey-upload').disabled=false;
+    el('journey-date').value=record?.date||todayDate();el('journey-title').value=record?.title||'';el('journey-note').value=record?.note||'';el('journey-error').hidden=true;el('journey-save').disabled=false;el('journey-upload').disabled=false;
     el('travel-form-title').textContent=record?'编辑足迹':'添加足迹';el('journey-save').textContent='保存';
     if(chosenCity){el('journey-city').value=chosenCity.province+' · '+cityName(chosenCity);view?.setPreview(chosenCity.id);}
     draftPreviews();setPanel('travel-form-view');openDrawer();el('journey-city').focus({preventScroll:true});
@@ -62417,11 +62653,11 @@ function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
     const recs=sorted(records.filter(r=>r.cityId===id));
     const photos=[];for(const r of recs)for(const p of (r.photos||[]))photos.push(p);
     cityEditId=id;cityId=id;chosenCity=city;editingId=null;draftPhotos=photos.slice(0,36);
-    el('journey-date').value=recs[0]?.date||new Date().toLocaleDateString('sv-SE');
+    el('journey-date').value=recs[0]?.date||todayDate();
     el('journey-city').value=city.province+' · '+cityName(city);
     el('journey-city').disabled=true;
     el('journey-title').value='';el('journey-note').value='';
-    el('travel-form-title').textContent='编辑照片';
+    el('travel-form-title').textContent='编辑足迹';
     el('journey-error').hidden=true;el('journey-save').disabled=false;el('journey-upload').disabled=false;
     el('travel-form-view').classList.add('city-photo-edit');el('journey-delete').hidden=false;
     draftPreviews();view?.setPreview(id);
@@ -62430,16 +62666,15 @@ function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
   form.onsubmit=async event=>{
     event.preventDefault();if(processing||saving||!loaded)return;el('journey-error').hidden=true;
     if(cityEditId){
-      const date=el('journey-date').value;
-      if(!date){formError('请选择日期。');return;}
+      if(!draftPhotos.length){formError('请至少保留一张照片。');return;}
       const existing=records.filter(r=>r.cityId===cityEditId);
       const base=existing[0],now=new Date().toISOString();
-      const record={id:base?.id||(globalThis.crypto?.randomUUID?.()||'journey-'+Date.now()+'-'+Math.random().toString(36).slice(2)),cityId:cityEditId,date,title:'',note:'',photos:[...draftPhotos],createdAt:base?.createdAt||now,updatedAt:now};
+      const record={id:base?.id||(globalThis.crypto?.randomUUID?.()||'journey-'+Date.now()+'-'+Math.random().toString(36).slice(2)),cityId:cityEditId,date:base?.date||todayDate(),title:'',note:'',photos:[...draftPhotos],createdAt:base?.createdAt||now,updatedAt:now};
       try{validJourneys([record]);saving=true;form.inert=true;el('journey-save').disabled=true;
         await journeySave(record);
         for(const r of existing){if(r.id!==record.id)await journeyRemove(r.id);}
         records=records.filter(r=>r.cityId!==cityEditId);records.push(record);
-        dirty=false;update();const cid=cityEditId;cityEditId=null;closeDrawer();
+        dirty=false;const cid=cityEditId;resetForm();update();closeDrawer();
         openPhotoBoard(cid);toast('已保存');
       }catch(error){formError(error.name==='QuotaExceededError'?'浏览器空间不足，请先导出备份，再整理一些照片。':error.message||'保存失败，请重试。');}
       finally{saving=false;form.inert=false;el('journey-save').disabled=false;}
@@ -62447,11 +62682,11 @@ function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
     }
     if(!chosenCity){const query=el('journey-city').value.trim(),exact=findCities(query).filter(c=>c.name===query||cityName(c)===query);if(exact.length===1)chooseCity(exact[0]);}
     if(!chosenCity){formError('请从城市列表中选择一个地点。');el('journey-city').focus();suggestions();return;}
-    const existing=records.filter(r=>r.cityId===chosenCity.id);
-    const base=editingId?existing.find(r=>r.id===editingId):existing[0];
+    if(records.some(r=>r.cityId===chosenCity.id)){formError('该城市已有足迹，请从地图点开后编辑。');return;}
+    if(!draftPhotos.length){formError('请至少上传一张照片。');return;}
     const now=new Date().toISOString();
-    const record={id:base?.id||(globalThis.crypto?.randomUUID?.()||'journey-'+Date.now()+'-'+Math.random().toString(36).slice(2)),cityId:chosenCity.id,date:el('journey-date').value,title:'',note:'',photos:[...draftPhotos],createdAt:base?.createdAt||now,updatedAt:now};
-    try{validJourneys([record]);saving=true;form.inert=true;el('journey-save').disabled=true;await journeySave(record);for(const r of existing){if(r.id!==record.id)await journeyRemove(r.id);}records=records.filter(r=>r.cityId!==chosenCity.id);records.push(record);dirty=false;recordId=record.id;update();showCity(record.cityId,true);toast('已保存');}catch(error){formError(error.name==='QuotaExceededError'?'浏览器空间不足，请先导出备份，再整理一些照片。':error.message||'保存失败，请重试。');}finally{saving=false;form.inert=false;el('journey-save').disabled=false;}
+    const record={id:globalThis.crypto?.randomUUID?.()||'journey-'+Date.now()+'-'+Math.random().toString(36).slice(2),cityId:chosenCity.id,date:todayDate(),title:'',note:'',photos:[...draftPhotos],createdAt:now,updatedAt:now};
+    try{validJourneys([record]);saving=true;form.inert=true;el('journey-save').disabled=true;await journeySave(record);records.push(record);const savedCity=record.cityId;dirty=false;recordId=record.id;resetForm();update();closeDrawer();openPhotoBoard(savedCity);toast('已保存');}catch(error){formError(error.name==='QuotaExceededError'?'浏览器空间不足，请先导出备份，再整理一些照片。':error.message||'保存失败，请重试。');}finally{saving=false;form.inert=false;el('journey-save').disabled=false;}
   };
   function open(updateURL=true){
     if(opened)return;opened=true;closePhotoBoard();onOpen();page.hidden=false;
@@ -62459,9 +62694,6 @@ function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
     try{
       if(!view)view=createTravelScene(el('travel-map-stage'),id=>{
         if(page.classList.contains('drawer-open')||saving)return;
-        if(id===QINGDAO_ID){focusQingdao();return;}
-        const scene=CITY_SCENES.find(s=>s.id===id);
-        if(scene){openCityScene(scene);return;}
         if(id)showCity(id);
         else if(view?.isFocused())view.exitDiorama();
         else if(!el('travel-detail-view').hidden)showList();
@@ -62470,32 +62702,55 @@ function createTravelApp({compressPhoto,icon,onOpen,onClose,onExport,onImport}){
         if(focused){closeDrawer();requestAnimationFrame(()=>focusBack.focus({preventScroll:true}));}
         else if(opened){requestAnimationFrame(()=>el('travel-add').focus({preventScroll:true}));}
       });
-      view.reset();view.setActive(true);view.setRecords(records.filter(r=>!isModelCity(r.cityId)));el('travel-map-loading').hidden=true;
+      view.reset();view.setActive(true);view.setRecords(records);el('travel-map-loading').hidden=true;
     }catch(error){console.error(error);el('travel-map-loading').textContent='3D 地图暂时无法显示，请开启浏览器硬件加速。城市列表和记录仍可使用。';}
     closeDrawer();el('travel-add').focus({preventScroll:true});if(!loaded)toast('正在读取本地足迹…');
   }
   async function close(updateURL=true){
     if(!opened)return true;if(!await guard()){if(!updateURL)history.replaceState(null,'','#map');return false;}
-    resetForm();closePhotoBoard();closeDrawer();focusActive=false;page.classList.remove('travel-focused');focusBack.hidden=true;opened=false;page.hidden=true;view?.setActive(false);el('travel-lightbox').close();onClose();if(updateURL&&location.hash==='#map')history.replaceState(null,'',location.pathname+location.search);return true;
+    resetForm();closePhotoBoard();
+    const sceneLayer=el('city-scene-layer');if(sceneLayer&&!sceneLayer.hidden){sceneReturnCity=null;sceneLayer.hidden=true;const frame=sceneLayer.querySelector('iframe');if(frame){frame.src='about:blank';frame.dataset.src='';}view?.exitDiorama();}
+    closeDrawer();focusActive=false;page.classList.remove('travel-focused');focusBack.hidden=true;opened=false;page.hidden=true;view?.setActive(false);el('travel-lightbox').close();onClose();if(updateURL&&location.hash==='#map')history.replaceState(null,'',location.pathname+location.search);return true;
   }
-  el('travel-back').onclick=()=>close();el('travel-add').onclick=()=>openForm();el('travel-city-add').onclick=()=>openForm(cityId);el('travel-close-detail').onclick=async()=>{await showList();};el('journey-delete').onclick=async()=>{if(!cityEditId||saving)return;const cid=cityEditId;const city=CITY_BY_ID.get(cid),owned=records.filter(r=>r.cityId===cid);if(!owned.length)return;
+  el('travel-back').onclick=()=>close();el('travel-add').onclick=()=>openForm();el('travel-city-add').onclick=()=>openForm(cityId);el('travel-close-detail').onclick=async()=>{await showList();};  el('journey-delete').onclick=async()=>{if(!cityEditId||saving)return;const cid=cityEditId;const city=CITY_BY_ID.get(cid),owned=records.filter(r=>r.cityId===cid);if(!owned.length)return;
     if(!await confirmAction('删除这条足迹？',`${cityName(city)}的照片和记录都会被删除，地图上也不再显示。`,'删除','取消'))return;
-    saving=true;try{for(const record of owned)await journeyRemove(record.id);records=records.filter(r=>r.cityId!==cid);cityEditId=null;dirty=false;update();closeDrawer();toast('已删除这条足迹');}catch{toast('删除失败，请重试。');}finally{saving=false;}
+    saving=true;try{for(const record of owned)await journeyRemove(record.id);records=records.filter(r=>r.cityId!==cid);resetForm();update();closeDrawer();toast('已删除这条足迹');}catch{toast('删除失败，请重试。');}finally{saving=false;}
   };
-  el('travel-close-form').onclick=async()=>{if(!await guard())return;const cid=cityEditId;if(cid){cityEditId=null;closeDrawer();openPhotoBoard(cid);return;}resetForm();closeDrawer();};
+  el('travel-close-form').onclick=async()=>{
+    if(!await guard())return;
+    const cid=cityEditId;
+    resetForm();
+    closeDrawer();
+    if(cid)openPhotoBoard(cid);
+  };
   async function closeFromOutside(){
     if(el('travel-form-view').hidden){closeDrawer();return;}
-    if(!dirty){closeDrawer();return;}
+    if(!dirty){resetForm();closeDrawer();return;}
     const save=await confirmAction('保存修改？','这条足迹有还没保存的修改。','保存','不保存');
     if(save){form.requestSubmit();return;}
     resetForm();closeDrawer();
   }
-  el('travel-drawer-close').onclick=closeDrawer;overlay.onclick=closeFromOutside;
+  el('travel-drawer-close').onclick=async()=>{
+    if(!el('travel-form-view').hidden){await closeFromOutside();return;}
+    closeDrawer();
+  };
+  overlay.onclick=closeFromOutside;
   el('travel-focus-back').onclick=()=>view?.exitDiorama();
-  el('travel-backup').onclick=onExport;el('travel-import').onclick=onImport;
+  if(el('travel-backup'))el('travel-backup').onclick=onExport;if(el('travel-import'))el('travel-import').onclick=onImport;
   el('travel-zoom-in').onclick=()=>view?.zoom(1.15);el('travel-zoom-out').onclick=()=>view?.zoom(1/1.15);el('travel-reset').onclick=()=>view?.reset();
   el('travel-lightbox-close').onclick=()=>el('travel-lightbox').close();el('travel-photo-prev').onclick=()=>nextPhoto(-1);el('travel-photo-next').onclick=()=>nextPhoto(1);
-  document.addEventListener('keydown',event=>{if(el('travel-lightbox').open){if(event.key==='ArrowLeft')nextPhoto(-1);if(event.key==='ArrowRight')nextPhoto(1);return;}if(view?.isFocused()){if(event.key==='Escape'){event.preventDefault();view.exitDiorama();}return;}if(!opened||modalOpen())return;if(event.key==='Escape'){if(page.classList.contains('drawer-open')){closeDrawer();return;}if(!el('journey-city-options').hidden){el('journey-city-options').hidden=true;el('journey-city').setAttribute('aria-expanded','false');return;}if(!el('travel-form-view').hidden)el('travel-close-form').click();else closeDrawer();}});
+  document.addEventListener('keydown',event=>{
+    if(el('travel-lightbox').open){if(event.key==='ArrowLeft')nextPhoto(-1);if(event.key==='ArrowRight')nextPhoto(1);return;}
+    if(view?.isFocused()){if(event.key==='Escape'){event.preventDefault();view.exitDiorama();}return;}
+    if(!opened||modalOpen())return;
+    if(event.key==='Escape'){
+      event.preventDefault();
+      if(!el('journey-city-options').hidden){el('journey-city-options').hidden=true;el('journey-city').setAttribute('aria-expanded','false');return;}
+      if(!el('travel-form-view').hidden&&page.classList.contains('drawer-open')){el('travel-close-form').click();return;}
+      if(page.classList.contains('drawer-open')){closeDrawer();return;}
+      if(!el('travel-form-view').hidden)el('travel-close-form').click();
+    }
+  });
   window.addEventListener('beforeunload',event=>{if(dirty||saving){event.preventDefault();event.returnValue='';}});
   const ready=journeyLoad().then(async list=>{records=validJourneys(list);await mergeFootprints();loaded=true;update();return true;}).catch(error=>{console.error(error);toast('浏览器存储不可用，足迹暂时无法保存。请关闭旧窗口后刷新。');return false;});
   async function mergeFootprints(){
@@ -62677,19 +62932,20 @@ function createAlbumScene(container,{onPhoto,onState,onLayout}){
 
 function createAlbumApp({compressPhoto,onOpen,onClose,onExport,onImport,onCoverChange}){
   const el=id=>document.getElementById(id),page=el('album-page');
-  let records=[],samples=albumSampleRecords(),samplesHidden=false,pages=[],index=0,opened=false,loaded=false,view=null,busy=false,editing=false,editingId=null,draftPhotos=[],draftTemplate='daily',dirty=false,processing=false,saving=false,draftPart=0,generation=0,previewTimer,toastTimer,galleryMode='overview',galleryPart=0,galleryGeneration=0,cropState=null,lightboxRecord=null,lightboxIndex=0,paintVersion=0;
+  // Template samples stay available for the in-editor template picker, but are not shown in the book.
+  let records=[],samples=albumSampleRecords(),samplesHidden=true,pages=[],index=0,opened=false,loaded=false,view=null,busy=false,editing=false,editingId=null,draftPhotos=[],draftTemplate='daily',dirty=false,processing=false,saving=false,draftPart=0,generation=0,previewTimer,toastTimer,galleryMode='templates',galleryPart=0,galleryGeneration=0,cropState=null,lightboxRecord=null,lightboxIndex=0,paintVersion=0,pickingFiles=false;
   const make=(parent,tag,text,className)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(className)node.className=className;parent.append(node);return node;};
   const button=(parent,text,action,className)=>{const b=make(parent,'button',text,className);b.type='button';b.onclick=action;return b;};
   function toast(message){el('album-toast').textContent=message;el('album-toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el('album-toast').classList.remove('show'),4500);}
   function error(message){el('album-form-error').textContent=message;el('album-form-error').hidden=false;}
   async function guard(){return !saving&&(!dirty||await confirmAction('放弃修改？','未保存的内容会丢失。'));}
-  function setBusy(value){busy=value;el('album-delete').disabled=value||saving;el('album-overview').disabled=value;el('album-year').disabled=value;for(const item of el('album-months').querySelectorAll('button'))item.disabled=value;el('album-edit').disabled=value||!pages[index]?.record;el('album-prev').disabled=value||index===0;el('album-next').disabled=value||index===pages.length-1;el('album-stage').setAttribute('aria-busy',String(value));}
+  function setBusy(value){busy=value;const editorDelete=el('album-editor-delete');if(editorDelete)editorDelete.disabled=value||saving||!editingId;el('album-year').disabled=value;for(const item of el('album-months').querySelectorAll('button'))item.disabled=value;el('album-prev').disabled=value||index===0;el('album-next').disabled=value||index===pages.length-1;el('album-stage').setAttribute('aria-busy',String(value));}
   function rebuild(key=pages[index]?.key){pages=[{key:'cover',cover:true},...albumPaginate([...records,...(samplesHidden?[]:samples)],albumMeasure)];index=Math.max(0,pages.findIndex(p=>p.key===key));timeline();updateInfo();if(onCoverChange)Promise.resolve(onCoverChange(pages)).catch(console.error);if(opened&&!editing)paint(pages,index);}
   function timeline(){
     const yearSelect=el('album-year'),chosen=yearSelect.value,years=[...new Set(pages.filter(p=>p.record).map(p=>p.record.date.slice(0,4)))].sort();
     yearSelect.replaceChildren();for(const year of years){const option=make(yearSelect,'option',year+' 年');option.value=year;}if(years.includes(chosen))yearSelect.value=chosen;
     if(!years.length){const option=make(yearSelect,'option','暂无故事');option.value='';}
-    renderMonths();el('album-samples').textContent=samplesHidden?'恢复模板示例':'移除模板示例';
+    renderMonths();
   }
   function renderMonths(){
     const nav=el('album-months');nav.replaceChildren();const cover=button(nav,'',()=>changePage(0,'jump'));make(cover,'strong','封面');cover.classList.toggle('active',index===0);cover.disabled=busy;
@@ -62702,7 +62958,6 @@ function createAlbumApp({compressPhoto,onOpen,onClose,onExport,onImport,onCoverC
     btn.onclick=()=>{const current=pages[index]?.record;if(current)openEditor(current.sample?null:current,current.template);};}
   function updateInfo(){
     const p=pages[index],r=p?.record;el('album-page-number').textContent=index===0?'封面':`${index} / ${pages.length-1}`;setBusy(busy);
-    el('album-edit').disabled=busy||!r;el('album-edit').hidden=!r||!!r.sample;el('album-edit').textContent='编辑';el('album-delete').hidden=!r||!!r.sample;
     const readable=el('album-readable');readable.replaceChildren();if(r){make(readable,'h2',r.title||r.date);make(readable,'p',p.lines.join('\n'));p.photos.forEach((photo,i)=>{button(readable,`查看第 ${p.photoStart+i+1} 张照片`,()=>showPhoto(r,p.photoStart+i));});if(!p.photos.length)button(readable,r.sample?'用这个模板':'编辑这一页',()=>openEditor(r.sample?null:r,r.template));}
     if(r&&el('album-year').value!==r.date.slice(0,4))el('album-year').value=r.date.slice(0,4);renderMonths();
   }
@@ -62742,13 +62997,30 @@ function createAlbumApp({compressPhoto,onOpen,onClose,onExport,onImport,onCoverC
     if(!await guard())return;if(!loaded){toast('本地存储尚未准备好，请稍后重试。');return;}
     generation++;clearTimeout(previewTimer);editing=true;updatePageEdit();editingId=record?.id||null;draftPhotos=(record?.photos||[]).map(p=>({src:p.src,crop:{...p.crop}}));dirty=false;processing=false;draftPart=0;
     el('album-form').reset();el('album-date').value=record?.date||new Date().toLocaleDateString('sv-SE');el('album-title').value=record?.title||'';el('album-note').value=record?.note||'';const selected=record?.template||template;draftTemplate=record?selected:ALBUM_TEMPLATE_CHOICES.includes(selected)?selected:autoTemplateFor(draftPhotos.length);if(!record)applyAutoTemplate();updateTemplateButton();
-    el('album-editor-title').textContent=record?'编辑故事':'添加故事';el('album-form-error').hidden=true;el('album-save').disabled=false;el('album-upload').disabled=false;el('album-editor').hidden=false;page.classList.add('album-editing');draftThumbnails();await preview();el('album-title').focus({preventScroll:true});
+    el('album-editor-title').textContent=record?'编辑故事':'添加故事';el('album-form-error').hidden=true;el('album-save').disabled=false;el('album-upload').disabled=false;
+    const editorDelete=el('album-editor-delete');if(editorDelete){editorDelete.hidden=!record;editorDelete.disabled=false;}
+    el('album-editor').hidden=false;page.classList.add('album-editing');draftThumbnails();await preview();el('album-title').focus({preventScroll:true});
   }
-  function resetEditor(){generation++;paintVersion++;clearTimeout(previewTimer);editing=false;dirty=false;processing=false;draftPhotos=[];editingId=null;el('album-files').value='';el('album-editor').hidden=true;page.classList.remove('album-editing');}
+  function resetEditor(){generation++;paintVersion++;clearTimeout(previewTimer);endFilePick();editing=false;dirty=false;processing=false;draftPhotos=[];editingId=null;el('album-files').value='';const editorDelete=el('album-editor-delete');if(editorDelete)editorDelete.hidden=true;el('album-editor').hidden=true;page.classList.remove('album-editing');}
   async function closeEditor(){if(!await guard())return false;resetEditor();updateInfo();await paint(pages,index);return true;}
   el('album-form').addEventListener('input',()=>{dirty=true;schedulePreview();});
-  el('album-upload').onclick=()=>el('album-files').click();
+  let pickClearTimer=0;
+  function endFilePick(){pickingFiles=false;clearTimeout(pickClearTimer);}
+  function scheduleEndFilePick(delay=400){
+    clearTimeout(pickClearTimer);
+    pickClearTimer=setTimeout(()=>{pickingFiles=false;},delay);
+  }
+  el('album-upload').onclick=()=>{
+    pickingFiles=true;clearTimeout(pickClearTimer);
+    el('album-files').click();
+    // Canceling the system picker often fires Escape as focus returns; keep the
+    // guard up briefly so that keypress does not close the whole editor.
+    const onReturn=()=>{scheduleEndFilePick(500);window.removeEventListener('focus',onReturn);};
+    window.addEventListener('focus',onReturn);
+    scheduleEndFilePick(2000);
+  };
   el('album-files').onchange=async()=>{
+    endFilePick();
     const files=[...el('album-files').files];if(!files.length)return;const gen=++generation,room=24-draftPhotos.length;processing=true;dirty=true;el('album-save').disabled=true;el('album-upload').disabled=true;el('album-form-error').hidden=true;draftThumbnails();const errors=[];
     if(files.length>room)errors.push('一个故事最多 24 张，超出的照片未添加。');
     for(const file of files.slice(0,room)){try{const src=await compressPhoto(file);if(gen!==generation)return;draftPhotos.push({src,crop:{x:.5,y:.5,zoom:1}});}catch(e){errors.push(e.message);}}
@@ -62760,9 +63032,22 @@ function createAlbumApp({compressPhoto,onOpen,onClose,onExport,onImport,onCoverC
     const record=draftRecord();if(!record.title&&!record.note&&!record.photos.length){error('请添加照片、标题或正文。');return;}if(!editingId)record.id=globalThis.crypto?.randomUUID?.()||'album-'+Date.now()+'-'+Math.random().toString(36).slice(2);
     try{validAlbums([record]);saving=true;el('album-form').inert=true;el('album-save').disabled=true;el('album-upload').disabled=true;await albumSave(record);records=records.filter(r=>r.id!==record.id);records.push(record);resetEditor();rebuild(record.id+':0');toast('已保存');}catch(e){error(e.name==='QuotaExceededError'?'浏览器空间不足，请先导出备份，再整理一些照片。':e.message||'保存失败，请重试。');}finally{saving=false;el('album-form').inert=false;el('album-save').disabled=false;el('album-upload').disabled=false;}
   };
-  async function removeStory(){const r=pages[index]?.record;if(busy||!r||r.sample)return;if(saving||!await confirmAction('删除故事？',`“${r.title||r.date}”及全部照片和续页将被删除。`,'删除','取消'))return;saving=true;try{await albumRemove(r.id);records=records.filter(p=>p.id!==r.id);rebuild('cover');toast('这个故事已删除');}catch{toast('删除失败，请重试。');}finally{saving=false;}}
-  async function toggleSamples(){if(!loaded||saving)return;if(editing&&!await closeEditor())return;saving=true;try{await hideAlbumSamples(!samplesHidden);samplesHidden=!samplesHidden;rebuild('cover');toast(samplesHidden?'模板示例已移除，自己的故事仍保留。':'模板示例已恢复，不计入自己的故事。');}catch{toast('无法保存示例设置，请重试。');}finally{saving=false;}}
-  async function showGallery(mode){if(saving||(mode==='templates'&&!editing))return;if(mode==='overview'&&editing&&!await closeEditor())return;galleryMode=mode;galleryPart=0;el('album-gallery-title').textContent=mode==='templates'?'模板':'页面总览';el('album-gallery').showModal();await renderGallery();}
+  async function removeStory(target){
+    const r=target||pages[index]?.record;
+    if(busy||!r||r.sample)return;
+    if(saving||!await confirmAction('删除故事？',`“${r.title||r.date}”及全部照片和续页将被删除。`,'删除','取消'))return;
+    saving=true;
+    try{
+      await albumRemove(r.id);
+      records=records.filter(p=>p.id!==r.id);
+      if(editing)resetEditor();
+      rebuild('cover');
+      if(opened&&!editing)await paint(pages,index);
+      toast('这个故事已删除');
+    }catch{toast('删除失败，请重试。');}
+    finally{saving=false;}
+  }
+  async function showGallery(mode='templates'){if(saving||!editing)return;galleryMode=mode;galleryPart=0;el('album-gallery-title').textContent='模板';el('album-gallery').showModal();await renderGallery();}
   async function renderGallery(){
     const gen=++galleryGeneration,grid=el('album-gallery-grid');grid.replaceChildren();const list=galleryMode==='templates'?ALBUM_TEMPLATE_CHOICES.map(kind=>albumPaginate(samples.filter(r=>r.template===kind),albumMeasure)[0]):pages,per=18,start=galleryPart*per,end=Math.min(start+per,list.length);
     el('album-gallery-prev').disabled=start===0;el('album-gallery-next').disabled=end===list.length;el('album-gallery-count').textContent=`${start+1}—${end} / ${list.length}`;
@@ -62790,14 +63075,23 @@ function createAlbumApp({compressPhoto,onOpen,onClose,onExport,onImport,onCoverC
   el('album-crop-close').onclick=el('album-crop-cancel').onclick=()=>el('album-crop').close();el('album-crop').addEventListener('close',()=>{cropState=null;cropDown=null;});
   async function open(updateURL=true,{cover=false}={}){if(opened)return true;if(cover)index=0;opened=true;onOpen();page.hidden=false;if(updateURL&&location.hash!=='#album')history.pushState(null,'','#album');if(!view){try{view=createAlbumScene(el('album-stage'),{onPhoto:at=>{const r=pages[index]?.record;if(r)showPhoto(r,at);},onState:setBusy,onLayout:bounds=>page.style.setProperty('--album-book-bottom',`${bounds.bottom}px`)});}catch(e){console.error(e);toast('当前浏览器无法显示 3D，已使用平面阅读模式。');}}view?.setActive(true);timeline();updateInfo();await paint(pages,index);el('album-add').focus({preventScroll:true});return true;}
   async function close(updateURL=true){if(!opened)return true;if(!await guard())return false;resetEditor();opened=false;page.hidden=true;view?.setActive(false);for(const id of ['album-crop','album-gallery','album-lightbox'])el(id).close();galleryGeneration++;if(updateURL&&location.hash==='#album')history.replaceState(null,'',location.pathname+location.search);onClose();return true;}
-  el('album-back').onclick=()=>close();el('album-prev').onclick=()=>changePage(index-1);el('album-next').onclick=()=>changePage(index+1);el('album-year').onchange=renderMonths;el('album-add').onclick=()=>openEditor();el('album-edit').onclick=()=>{const r=pages[index]?.record;if(r)openEditor(r.sample?null:r,r.template);};el('album-delete').onclick=removeStory;el('album-samples').onclick=toggleSamples;
+  el('album-back').onclick=()=>close();el('album-prev').onclick=()=>changePage(index-1);el('album-next').onclick=()=>changePage(index+1);el('album-year').onchange=renderMonths;el('album-add').onclick=()=>openEditor();
   el('album-cancel').onclick=el('album-close-editor').onclick=closeEditor;el('album-draft-prev').onclick=()=>{draftPart--;preview();};el('album-draft-next').onclick=()=>{draftPart++;preview();};
-  if(el('album-templates'))el('album-templates').onclick=()=>showGallery('templates');el('album-overview').onclick=()=>showGallery('overview');el('album-gallery-close').onclick=()=>el('album-gallery').close();el('album-gallery-prev').onclick=()=>{galleryPart--;renderGallery();};el('album-gallery-next').onclick=()=>{galleryPart++;renderGallery();};el('album-gallery').addEventListener('close',()=>galleryGeneration++);
-  el('album-lightbox-close').onclick=()=>el('album-lightbox').close();el('album-photo-prev').onclick=()=>nextPhoto(-1);el('album-photo-next').onclick=()=>nextPhoto(1);el('album-backup').onclick=onExport;el('album-import').onclick=async()=>{if(editing&&!await closeEditor())return;onImport();};
-  document.addEventListener('keydown',event=>{if(!opened)return;if(el('album-lightbox').open){if(event.key==='ArrowLeft')nextPhoto(-1);if(event.key==='ArrowRight')nextPhoto(1);return;}if(modalOpen())return;if(event.key==='Escape'&&editing){event.preventDefault();closeEditor();}});
+  el('album-editor-delete').onclick=()=>{const r=records.find(item=>item.id===editingId);if(r)removeStory(r);};
+  if(el('album-templates'))el('album-templates').onclick=()=>showGallery('templates');el('album-gallery-close').onclick=()=>el('album-gallery').close();el('album-gallery-prev').onclick=()=>{galleryPart--;renderGallery();};el('album-gallery-next').onclick=()=>{galleryPart++;renderGallery();};el('album-gallery').addEventListener('close',()=>galleryGeneration++);
+  el('album-lightbox-close').onclick=()=>el('album-lightbox').close();el('album-photo-prev').onclick=()=>nextPhoto(-1);el('album-photo-next').onclick=()=>nextPhoto(1);
+  document.addEventListener('keydown',event=>{
+    if(!opened)return;
+    if(el('album-lightbox').open){if(event.key==='ArrowLeft')nextPhoto(-1);if(event.key==='ArrowRight')nextPhoto(1);return;}
+    if(modalOpen())return;
+    if(event.key==='Escape'&&editing){
+      if(pickingFiles){event.preventDefault();endFilePick();return;}
+      event.preventDefault();closeEditor();
+    }
+  });
   window.addEventListener('beforeunload',event=>{if(dirty||saving){event.preventDefault();event.returnValue='';}});
   rebuild('cover');
-  const ready=Promise.all([albumLoad(),albumSamplesHidden()]).then(([list,hidden])=>{records=validAlbums(list);samplesHidden=hidden;loaded=true;rebuild();return true;}).catch(e=>{console.error(e);toast('浏览器存储不可用。请关闭旧版小屋窗口后刷新。');return false;});
+  const ready=albumLoad().then(list=>{records=validAlbums(list);samplesHidden=true;loaded=true;rebuild();return true;}).catch(e=>{console.error(e);toast('浏览器存储不可用。请关闭旧版小屋窗口后刷新。');return false;});
   return {open,close,ready,toast,fit:()=>view?.fit(),coverBounds:()=>view?.coverBounds(),isWorking:()=>processing||saving,prepareImport:async()=>{if(saving)return false;return !editing||await closeEditor();},isReady:()=>loaded,isOpen:()=>opened,getRecords:()=>records,replaceRecords:list=>{records=validAlbums(list);rebuild();}};
 }
 
@@ -62890,7 +63184,7 @@ function createCinemaScene(container){
   };
 }
 
-function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,onCoverChange=()=>{},getRoomPhotos=()=>[],getAlbumPages=()=>[],namespace='cinema',pageHash='#cinema',sceneFactory=createCinemaScene,loadRecord=cinemaLoad,saveRecord=cinemaSave,validateRecord=validCinema,playlistId='cinema-playlist',allowSamples=true,photoInterval=1000,sceneLabel='客厅投影',musicOnly=false,instrumentSound=false,swipePhotos=true}){
+function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,onCoverChange=()=>{},getRoomPhotos=()=>[],getAlbumPages=()=>[],namespace='cinema',pageHash='#cinema',sceneFactory=createCinemaScene,loadRecord=cinemaLoad,saveRecord=cinemaSave,validateRecord=validCinema,playlistId='cinema-playlist',allowSamples=true,photoInterval=2000,sceneLabel='客厅投影',musicOnly=false,instrumentSound=false,swipePhotos=true}){
   const el=id=>document.getElementById(id.replace(/^cinema-/,namespace+'-')),page=el('cinema-page'),editor=el('cinema-editor');
   const examples=albumSampleRecords(),samplePhotos=[examples[0].photos[0],examples[2].photos[0],examples[3].photos[0],examples[0].photos[2],examples[0].photos[1],examples[2].photos[1]].map((p,i)=>({id:'cinema-sample-'+i,src:p.src,sample:i}));
   let record=null,draft=null,loaded=false,opened=false,view=null,index=0,playing=false,moving=false,muted=false,audio=null,audioSrc=null,timer=0,nextAt=0,toastTimer=0,generation=0,dirty=false,processing=false,saving=false,displayVersion=0,openVersion=0,renderedPlay=null,renderedMute=null;
@@ -62935,6 +63229,49 @@ function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,onCover
     const landed=from<to?to-1:to;
     dirty=true;renderDraft();const card=el('cinema-photo-drafts').children[landed];card?.focus({preventScroll:true});if(keyboard)card?.scrollIntoView({block:'nearest',inline:'nearest'});
   });
+  function draftScrollParts(){
+    const grid=el('cinema-photo-drafts');
+    const rail=grid?.closest('.cinema-drafts-rail');
+    return {grid,bar:rail?.querySelector('.cinema-drafts-bar'),thumb:rail?.querySelector('.cinema-drafts-thumb')};
+  }
+  function syncDraftScroll(){
+    const {grid,bar,thumb}=draftScrollParts();if(!grid||!bar||!thumb)return;
+    const max=Math.max(0,grid.scrollWidth-grid.clientWidth);
+    bar.hidden=max<=2;
+    if(max<=2){thumb.style.width='100%';thumb.style.left='0';return;}
+    const track=bar.clientWidth,thumbW=Math.max(36,track*(grid.clientWidth/grid.scrollWidth)),maxLeft=Math.max(0,track-thumbW);
+    thumb.style.width=thumbW+'px';
+    thumb.style.left=((grid.scrollLeft/max)*maxLeft)+'px';
+  }
+  let draftScrollBound=false,draftThumbDrag=null;
+  function bindDraftScroll(){
+    if(draftScrollBound)return;const {grid,bar,thumb}=draftScrollParts();if(!grid||!bar||!thumb)return;
+    draftScrollBound=true;
+    grid.addEventListener('scroll',syncDraftScroll,{passive:true});
+    window.addEventListener('resize',syncDraftScroll);
+    const scrollFromClientX=clientX=>{
+      const max=Math.max(0,grid.scrollWidth-grid.clientWidth);if(max<=2)return;
+      const rect=bar.getBoundingClientRect(),thumbW=thumb.offsetWidth,maxLeft=Math.max(0,rect.width-thumbW);
+      const left=Math.max(0,Math.min(maxLeft,clientX-rect.left-(draftThumbDrag?.offset||thumbW/2)));
+      grid.scrollLeft=maxLeft? (left/maxLeft)*max : 0;
+    };
+    thumb.addEventListener('pointerdown',e=>{
+      e.preventDefault();e.stopPropagation();
+      draftThumbDrag={offset:e.clientX-thumb.getBoundingClientRect().left};
+      thumb.setPointerCapture(e.pointerId);
+    });
+    thumb.addEventListener('pointermove',e=>{if(!draftThumbDrag)return;scrollFromClientX(e.clientX);});
+    thumb.addEventListener('pointerup',()=>{draftThumbDrag=null;});
+    thumb.addEventListener('pointercancel',()=>{draftThumbDrag=null;});
+    bar.addEventListener('pointerdown',e=>{
+      if(e.target===thumb)return;
+      e.preventDefault();
+      const thumbW=thumb.offsetWidth;
+      draftThumbDrag={offset:thumbW/2};
+      scrollFromClientX(e.clientX);
+      thumb.setPointerCapture(e.pointerId);
+    });
+  }
   function renderDraft(){
     sorter.reset();const list=photosFor(draft),grid=el('cinema-photo-drafts'),scrollLeft=grid.scrollLeft;grid.replaceChildren();
     if(!list.length){const empty=document.createElement('p');empty.className='cinema-drafts-empty';empty.textContent='暂无照片';grid.append(empty);}
@@ -62945,7 +63282,11 @@ function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,onCover
       grid.append(figure);
     });
     grid.scrollLeft=scrollLeft;
+    bindDraftScroll();
+    requestAnimationFrame(()=>{syncDraftScroll();requestAnimationFrame(syncDraftScroll);});
     el('cinema-samples').hidden=!allowSamples||draft.photos.length>0;el('cinema-samples').textContent=draft.sampleIds.length?'移除占位图':'恢复占位图';
+    const clearBtn=el('cinema-clear-photos');if(clearBtn)clearBtn.hidden=!draft.photos.length&&!draft.sampleIds.length;
+    const countEl=el('cinema-photo-count');if(countEl)countEl.textContent=draft.photos.length?`已上传 ${draft.photos.length} 张`:(draft.sampleIds.length?`占位图 ${draft.sampleIds.length} 张`:'已上传 0 张');
     el('cinema-music-name').textContent=draft.music?.name||'未添加';el('cinema-music-upload').textContent=draft.music?'替换':'添加';el('cinema-music-remove').hidden=!draft.music;
   }
   function openEditor(section='photos'){if(!loaded||saving){toast('本地存储尚未就绪。');return;}pause();generation++;const value=config();draft={photos:value.photos.map(p=>({...p})),music:value.music?{...value.music}:null,sampleIds:[...value.sampleIds]};dirty=false;processing=false;el('cinema-form').inert=false;el('cinema-save').disabled=false;el('cinema-form-error').hidden=true;renderDraft();editor.showModal();el('cinema-photo-drafts').scrollLeft=0;editor.scrollTop=0;(section==='music'?el('cinema-music-upload'):el('cinema-upload')).focus();}
@@ -62967,13 +63308,20 @@ function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,onCover
   el('cinema-music-file').onchange=async()=>{
     const file=el('cinema-music-file').files[0];if(!file||!draft||processing)return;
     const token=++generation;dirty=true;processing=true;el('cinema-form').inert=true;el('cinema-save').disabled=true;el('cinema-form-error').hidden=true;
-    try{if(file.size>30*1024*1024)throw new Error('音乐超过 30 MB，请选择小一些的文件。');const fallback={mp3:'audio/mpeg',m4a:'audio/mp4',wav:'audio/wav',ogg:'audio/ogg'},type=file.type||fallback[file.name.split('.').pop().toLowerCase()];if(!['audio/mpeg','audio/mp4','audio/x-m4a','audio/wav','audio/x-wav','audio/ogg'].includes(type))throw new Error('请选择 MP3、M4A、WAV 或 OGG 音乐。');const source=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve('data:'+type+';base64,'+String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('读取音乐失败。'));reader.readAsDataURL(file);});await checkAudio(source);if(token!==generation)return;draft.music={name:file.name.slice(0,180),type,src:source};renderDraft();}
+    try{if(file.size>30*1024*1024)throw new Error('音乐超过 30 MB，请选择小一些的文件。');const fallback={mp3:'audio/mpeg',m4a:'audio/mp4',wav:'audio/wav',ogg:'audio/ogg'},type=file.type||fallback[file.name.split('.').pop().toLowerCase()];if(!['audio/mpeg','audio/mp4','audio/x-m4a','audio/wav','audio/x-wav','audio/ogg'].includes(type))throw new Error('请选择 MP3、M4A、WAV 或 OGG 音乐。');await detectHomeMode();let source;if(isHomeMode()){source=await homeUploadFile(file,'music');await checkAudio(source);}else{source=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve('data:'+type+';base64,'+String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('读取音乐失败。'));reader.readAsDataURL(file);});await checkAudio(source);}if(token!==generation)return;draft.music={name:file.name.slice(0,180),type,src:source};renderDraft();}
     catch(reason){if(token===generation)error(reason.message||'音乐处理失败。');}
     finally{if(token===generation){processing=false;el('cinema-form').inert=false;el('cinema-save').disabled=false;el('cinema-music-file').value='';}}
   };
   el('cinema-music-remove').onclick=()=>{draft.music=null;dirty=true;renderDraft();};
   el('cinema-samples').onclick=()=>{draft.sampleIds=draft.sampleIds.length?[]:[0,1,2,3,4,5];dirty=true;renderDraft();};
   el('cinema-reverse').onclick=()=>{if(!draft||processing||saving)return;sorter.reset();if(draft.photos.length)draft.photos.reverse();else draft.sampleIds.reverse();dirty=true;renderDraft();el('cinema-photo-drafts').scrollLeft=0;};
+  el('cinema-clear-photos').onclick=async()=>{
+    if(!draft||processing||saving)return;
+    if(!draft.photos.length&&!draft.sampleIds.length)return;
+    const note=draft.photos.length?`将清除清单里的 ${draft.photos.length} 张已上传照片。`:'将清除当前占位图。';
+    if(!await confirmAction('清除全部照片？',note+'保存后才会生效。','清除','取消'))return;
+    sorter.reset();draft.photos=[];draft.sampleIds=[];dirty=true;renderDraft();el('cinema-photo-drafts').scrollLeft=0;syncDraftScroll();
+  };
   el('cinema-form').onsubmit=async event=>{
     event.preventDefault();if(saving||processing||!draft)return;saving=true;el('cinema-form').inert=true;el('cinema-save').disabled=true;
     try{const next=validateRecord({id:playlistId,...draft,updatedAt:new Date().toISOString()});await saveRecord(next);record=next;index=0;dirty=false;editor.close();setMusic();dots();await Promise.all([syncCover(),show(0)]);toast('已保存');}
@@ -62992,7 +63340,7 @@ function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,onCover
     }catch(reason){if(!opened||version!==openVersion)return;console.error(reason);el('cinema-loading').hidden=false;el('cinema-loading').textContent='无法显示 3D 空间，请开启浏览器硬件加速后刷新。';}
   }
   async function close(updateURL=true){if(!opened)return true;if(editor.open&&!await closeEditor())return false;openVersion++;pause();displayVersion++;moving=false;view?.setActive(false);opened=false;page.hidden=true;if(updateURL)history.replaceState(null,'',location.pathname+location.search);onClose();return true;}
-  el('cinema-edit').onclick=el('cinema-empty-add').onclick=()=>openEditor();el('cinema-back').onclick=()=>close();el('cinema-play').onclick=()=>playing?pause():play();el('cinema-prev').onclick=()=>step(-1);el('cinema-next').onclick=()=>step(1);el('cinema-mute').onclick=()=>{muted=!muted;if(audio)audio.muted=muted;sync();};el('cinema-backup').onclick=onExport;el('cinema-import').onclick=onImport;
+  el('cinema-edit').onclick=el('cinema-empty-add').onclick=()=>openEditor();el('cinema-back').onclick=()=>close();el('cinema-play').onclick=()=>playing?pause():play();el('cinema-prev').onclick=()=>step(-1);el('cinema-next').onclick=()=>step(1);el('cinema-mute').onclick=()=>{muted=!muted;if(audio)audio.muted=muted;sync();};if(el('cinema-backup'))el('cinema-backup').onclick=onExport;if(el('cinema-import'))el('cinema-import').onclick=onImport;
   document.addEventListener('keydown',event=>{if(!opened||modalOpen()||event.altKey||event.ctrlKey||event.metaKey)return;if(event.key==='ArrowLeft'){event.preventDefault();step(-1);}if(event.key==='ArrowRight'){event.preventDefault();step(1);}if(event.code==='Space'&&event.target.tagName!=='BUTTON'){event.preventDefault();playing?pause():play();}if(event.key==='Escape')close();});
   let touch=null;el('cinema-scene').addEventListener('pointerdown',event=>{if(!swipePhotos)return;if(touch){touch=null;return;}if(event.isPrimary)touch={id:event.pointerId,x:event.clientX,y:event.clientY};});el('cinema-scene').addEventListener('pointercancel',()=>touch=null);el('cinema-scene').addEventListener('pointerup',event=>{const start=touch;touch=null;if(!start||start.id!==event.pointerId||!opened||modalOpen())return;const dx=event.clientX-start.x,dy=event.clientY-start.y;if(Math.abs(dx)>45&&Math.abs(dx)>Math.abs(dy)*1.5)step(dx<0?1:-1);});
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&opened)pause();});window.addEventListener('beforeunload',event=>{if(dirty||saving){event.preventDefault();event.returnValue='';}});
@@ -63369,13 +63717,20 @@ function createKtvApp({onOpen,onClose,onExport,onImport}){
   async function readVideo(file){
     const ext=file.name.split('.').pop().toLowerCase(),type=(file.type||VIDEO_EXTENSIONS[ext]||'').split(';')[0].trim();
     if(!type.startsWith('video/'))throw new Error('请选择视频文件（MP4 / WebM / OGG / MOV）。');
-    const src=await new Promise((resolve,reject)=>{
-      const reader=new FileReader();
-      reader.onprogress=event=>{if(event.lengthComputable)el('upload-status').textContent=`正在读取视频… ${Math.round(event.loaded/event.total*100)}%`;};
-      reader.onload=()=>resolve(String(reader.result));
-      reader.onerror=()=>reject(new Error('无法读取这个视频文件。'));
-      reader.readAsDataURL(file);
-    });
+    await detectHomeMode();
+    let src;
+    if(isHomeMode()){
+      el('upload-status').textContent='正在上传到小屋电脑…';
+      src=await homeUploadFile(file,'videos');
+    }else{
+      src=await new Promise((resolve,reject)=>{
+        const reader=new FileReader();
+        reader.onprogress=event=>{if(event.lengthComputable)el('upload-status').textContent=`正在读取视频… ${Math.round(event.loaded/event.total*100)}%`;};
+        reader.onload=()=>resolve(String(reader.result));
+        reader.onerror=()=>reject(new Error('无法读取这个视频文件。'));
+        reader.readAsDataURL(file);
+      });
+    }
     const duration=await probeVideo(src);
     return {name:file.name.slice(0,180),type,size:file.size,src,...(duration>0?{duration}:{})};
   }
@@ -63441,7 +63796,7 @@ function createKtvApp({onOpen,onClose,onExport,onImport}){
   }
   el('back').onclick=()=>close();el('edit').onclick=openEditor;el('screen-back').onclick=leaveScreenView;el('video-play').onclick=toggleVideo;
   el('video-mute').onclick=()=>{videoMuted=!videoMuted;view?.setVideoMuted(videoMuted);try{localStorage.setItem('little-us-ktv-video-muted',String(videoMuted));}catch{}sync();};
-  el('backup').onclick=onExport;el('import').onclick=onImport;
+  if(el('backup'))el('backup').onclick=onExport;if(el('import'))el('import').onclick=onImport;
   el('light').onclick=()=>{const warm=view?.toggleLight();el('light').setAttribute('aria-pressed',String(!warm));};
   el('zoom-in').onclick=()=>view?.zoom(1.15);el('zoom-out').onclick=()=>view?.zoom(1/1.15);el('reset').onclick=()=>view?.reset();
   document.addEventListener('keydown',event=>{
@@ -63647,7 +64002,7 @@ function createPageTransition({room,home,hideHome}){
 }
 
 const BIRD_TOUR_STOPS=[
-  {id:'bird',name:'小木屋',text:'这是我的小木屋。我平时就住在这里，从这里出发带你逛一圈。'},
+  {id:'bird',name:'小木屋',text:'这是我的小木屋。点我可以重新导览，点木屋可以添加回忆。'},
   {id:'photos',name:'照片墙',text:'照片墙里藏着我们的相册。点击进入，可以翻看照片、写故事，收藏每个小日常。'},
   {id:'guitar',name:'吉他',text:'点击这把吉他，就能进入 KTV。可以添加照片、点歌听音乐，还能拨一拨吉他。'},
   {id:'map',name:'地图',text:'点击地图，进入我们的足迹。选一座城市，记录去过的地方和旅途中的照片。'},
@@ -63734,6 +64089,7 @@ const $=id=>document.getElementById(id);
 const ICONS={back:'<path d="m12 4-6 6 6 6M6 10h12"/>',map:'<path d="m2 5 5-2 6 2 5-2v14l-5 2-6-2-5 2ZM7 3v14M13 5v14"/>',search:'<circle cx="8" cy="8" r="5"/><path d="m12 12 5 5"/>',home:'<path d="m3 10 7-7 7 7v7H3z"/><path d="M8 17v-6h4v6"/>',box:'<rect x="3" y="4" width="14" height="13" rx="3"/><path d="M7 4V2h6v2M3 9h14M8 12h4"/>',plus:'<path d="M10 4v12M4 10h12"/>',minus:'<path d="M4 10h12"/>',close:'<path d="m5 5 10 10M15 5 5 15"/>',reset:'<path d="M4 7a7 7 0 1 1-1 6M4 3v4h4"/>',heart:'<path d="M10 17S2 12 2 7a4 4 0 0 1 8-1 4 4 0 0 1 8 1c0 5-8 10-8 10Z"/>',music:'<path d="M8 14V4l8-2v10M8 7l8-2"/><ellipse cx="5" cy="15" rx="3" ry="2"/><ellipse cx="13" cy="13" rx="3" ry="2"/>',mic:'<rect x="7" y="2" width="6" height="11" rx="3"/><path d="M4 9v1a6 6 0 0 0 12 0V9M10 16v3M7 19h6"/>',film:'<rect x="2" y="3" width="16" height="12" rx="2"/><path d="m8 6 5 3-5 3ZM10 15v3M6 18h8"/>',bird:'<path d="M4 16c1-3 2-4 3-5V7a4 4 0 0 1 7-3l3 2-3 1c0 7-4 10-10 9Z"/><path d="M7 11c0 2 2 3 4 2M9 16v2M12 16v2"/><circle cx="11" cy="5" r=".6"/>',photo:'<rect x="2" y="3" width="16" height="14" rx="2"/><circle cx="7" cy="7" r="1.5"/><path d="m3 15 5-5 3 3 3-4 4 5"/>',move:'<path d="M10 2v16M2 10h16M7 5l3-3 3 3M7 15l3 3 3-3M5 7l-3 3 3 3M15 7l3 3-3 3"/>',arrow:'<path d="M3 10h14m-5-5 5 5-5 5"/>',vase:'<path d="M7 2h6M8 2v3c0 1.6-2 2.2-2 4.1v5c0 1.8 1.6 2.6 4 2.6s4-.8 4-2.6v-5C14 7.2 12 6.6 12 5V2M10 8.4c-1 .7-1.6 1.7-1.7 2.9"/>',download:'<path d="M10 2v11m-4-4 4 4 4-4M3 13v4h14v-4"/>',upload:'<path d="M10 13V2m-4 4 4-4 4 4M3 13v4h14v-4"/>'};
 function icon(name){return '<svg viewBox="0 0 20 20" aria-hidden="true">'+(ICONS[name]||ICONS.heart)+'</svg>';}
 document.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=icon(el.dataset.icon));
+installDateSelects();
 const OBJECTS={guitar:{name:'吉他',icon:'music'},studio:{name:'录音台',icon:'mic'},screen:{name:'幕布',icon:'film'},photos:{name:'照片墙',icon:'photo'},vase:{name:'花瓶',icon:'vase'},bird:{name:'小鸟屋',icon:'home'},sofa:{name:'沙发',icon:'heart'}};
 let albumRoomPages=[],memories=[],selectedId=null,roomView,birdTour,travelApp,albumApp,cinemaApp,ktvApp,openingApp,pageTransition,editingId=null,draftPhoto=null,photoTask=null,photoGeneration=0,storageReady=false,previousFocus=null,memoryDirty=false,memorySaving=false,importing=false;
 function localDate(){const now=new Date();return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;}
@@ -63741,12 +64097,29 @@ let toastTimer;
 function toast(message){$('toast').textContent=message;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),4000);}
 function sortedMemories(){return [...memories].sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt));}
 function addText(parent,tag,text,className){const el=document.createElement(tag);el.textContent=text;if(className)el.className=className;parent.append(el);return el;}
+function deleteMemory(record){
+  return async()=>{
+    if(memorySaving||!await confirmAction('删除回忆？',`“${record.title}”及照片将被删除。`,'删除','取消'))return;
+    memorySaving=true;
+    try{await memoryRemove(record.id);memories=memories.filter(m=>m.id!==record.id);await refreshMemories();toast('这段回忆已移除');}
+    catch{toast('删除失败，请重试。');}
+    finally{memorySaving=false;}
+  };
+}
 function renderObject(){
   if(!selectedId)return;const object=OBJECTS[selectedId];
   $('object-title').textContent=object.name;
   $('object-memories').replaceChildren();const records=sortedMemories().filter(m=>m.objectId===selectedId);
   if(!records.length){addText($('object-memories'),'div','暂无回忆','object-empty');return;}
-  for(const record of records){const card=document.createElement('article');card.className='mini-card';if(record.photo){const img=document.createElement('img');img.src=record.photo;img.alt=record.title;card.append(img);}addText(card,'h3',record.title);addText(card,'time',record.date.replaceAll('-','.'));if(record.note)addText(card,'p',record.note);$('object-memories').append(card);}
+  for(const record of records){
+    const card=document.createElement('article');card.className='mini-card';
+    if(record.photo){const img=document.createElement('img');img.src=record.photo;img.alt=record.title;card.append(img);}
+    addText(card,'h3',record.title);addText(card,'time',record.date.replaceAll('-','.'));
+    if(record.note)addText(card,'p',record.note);
+    const actions=document.createElement('div');actions.className='card-actions';
+    const remove=addText(actions,'button','删除');remove.type='button';remove.setAttribute('aria-label','删除回忆：'+record.title);remove.onclick=deleteMemory(record);
+    card.append(actions);$('object-memories').append(card);
+  }
 }
 function selectObject(id,hit){if(pageTransition?.isActive())return;if(hit?.action==='bird-tour'){if(!birdTour?.isActive()){if(!$('memory-drawer').hidden||modalOpen())return;$('object-panel').hidden=true;birdTour?.start();}return;}birdTour?.cancel();const route={photos:'#album',map:'#map',screen:'#cinema',guitar:'#ktv'}[id];if(route){location.hash=route;return;}if(!OBJECTS[id])return;selectedId=id;roomView?.selectObject(id);renderObject();$('object-panel').hidden=false;$('close-object').focus({preventScroll:true});}
 function renderMemories(){
@@ -63759,7 +64132,7 @@ function renderMemories(){
     addText(article,'h3',record.title);if(record.note)addText(article,'p',record.note);
     const actions=document.createElement('div');actions.className='card-actions';
     const edit=addText(actions,'button','编辑');edit.type='button';edit.setAttribute('aria-label','编辑回忆：'+record.title);edit.onclick=()=>openForm(record.objectId,record);
-    const remove=addText(actions,'button','删除');remove.type='button';remove.setAttribute('aria-label','删除回忆：'+record.title);remove.onclick=async()=>{if(memorySaving||!await confirmAction('删除回忆？',`“${record.title}”及照片将被删除。`,'删除','取消'))return;memorySaving=true;try{await memoryRemove(record.id);memories=memories.filter(m=>m.id!==record.id);await refreshMemories();toast('这段回忆已移除');}catch{toast('删除失败，请重试。');}finally{memorySaving=false;}};
+    const remove=addText(actions,'button','删除');remove.type='button';remove.setAttribute('aria-label','删除回忆：'+record.title);remove.onclick=deleteMemory(record);
     article.append(actions);$('memory-list').append(article);
   }
   renderObject();
@@ -63781,7 +64154,21 @@ async function compressPhoto(file){
   if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('请选择 JPG、PNG 或 WebP 照片。');
   if(file.size>20*1024*1024)throw new Error('这张照片超过 20 MB，请选择小一些的照片。');
   const url=URL.createObjectURL(file),img=new Image();
-  try{img.src=url;await img.decode();const scale=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));const ctx=canvas.getContext('2d');ctx.fillStyle='#fffcf3';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);return canvas.toDataURL('image/jpeg',.88);}catch(error){throw new Error('无法读取这张照片，请换一张 JPG、PNG 或 WebP 图片。');}finally{URL.revokeObjectURL(url);}
+  try{
+    img.src=url;await img.decode();
+    const scale=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight));
+    const canvas=document.createElement('canvas');
+    canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));
+    canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
+    const ctx=canvas.getContext('2d');ctx.fillStyle='#fffcf3';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    const dataUrl=canvas.toDataURL('image/jpeg',.88);
+    await detectHomeMode();
+    if(isHomeMode())return await homeUploadDataUrl(dataUrl,'photos');
+    return dataUrl;
+  }catch(error){
+    if(error&&error.message&&!error.message.includes('无法读取'))throw error;
+    throw new Error('无法读取这张照片，请换一张 JPG、PNG 或 WebP 图片。');
+  }finally{URL.revokeObjectURL(url);}
 }
 $('memory-form').addEventListener('input',()=>memoryDirty=true);
 $('memory-photo').onchange=()=>{memoryDirty=true;const file=$('memory-photo').files[0];if(!file)return;const generation=++photoGeneration;$('form-error').hidden=true;$('save-memory').disabled=true;
@@ -63808,8 +64195,7 @@ $('close-modal').onclick=closeMemoryForm;
 window.addEventListener('beforeunload',event=>{if(memoryDirty||memorySaving){event.preventDefault();event.returnValue='';}});
 $('add-memory').onclick=()=>openForm('photos');$('drawer-add').onclick=()=>openForm('photos');$('object-add').onclick=()=>openForm(selectedId||'photos');
 $('memory-box').onclick=openDrawer;$('close-drawer').onclick=closeDrawer;$('drawer-overlay').onclick=closeDrawer;
-$('close-object').onclick=()=>{$('object-panel').hidden=true;roomView?.selectObject(null);document.querySelector(`[data-object="${selectedId}"]`)?.focus();};
-document.querySelectorAll('[data-object]').forEach(button=>button.onclick=()=>selectObject(button.dataset.object));
+$('close-object').onclick=()=>{$('object-panel').hidden=true;roomView?.selectObject(null);$('home').focus({preventScroll:true});};
 document.addEventListener('keydown',e=>{
   if($('app').hidden||openingApp?.isActive()||modalOpen())return;
   if(!$('memory-drawer').hidden){if(e.key==='Escape'){closeDrawer();return;}if(e.key==='Tab'){const focusable=[...$('memory-drawer').querySelectorAll('button:not([disabled])')];const first=focusable[0],last=focusable.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}}
@@ -63823,18 +64209,15 @@ async function exportAll(){
   const backup={format:'little-us-backup',version:6,exportedAt:new Date().toISOString(),memories,journeys:travelApp.getRecords(),albums:albumApp.getRecords(),cinema:cinemaApp.getRecord(),ktv:ktvApp.getRecord()};
   const blob=new Blob([JSON.stringify(backup)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`little-us-全部回忆备份-${localDate()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);backupToast('备份已导出');
 }
-$('export-memories').onclick=exportAll;
 async function requestImport(){
-  if(importing||memorySaving)return;
+  if(importing||memorySaving||!$('backup-file'))return;
   if($('memory-dialog').open&&!await closeMemoryForm())return;
   if(!await travelApp.prepareImport()||!await albumApp.prepareImport()||!await cinemaApp.prepareImport()||!await ktvApp.prepareImport())return;
   $('backup-file').click();
 }
-$('import-memories').onclick=requestImport;
-$('backup-file').onchange=async()=>{
+if($('backup-file'))$('backup-file').onchange=async()=>{
   const file=$('backup-file').files[0];if(!file||importing)return;
   importing=true;for(const id of ['app','travel-page','album-page','cinema-page','ktv-page'])$(id).inert=true;
-  $('import-memories').disabled=true;$('travel-import').disabled=true;$('album-import').disabled=true;$('cinema-import').disabled=true;$('ktv-import').disabled=true;
   try{
     await Promise.all([memoryReady,travelApp.ready,albumApp.ready,cinemaApp.ready,ktvApp.ready]);if(!storageReady||!travelApp.isReady()||!albumApp.isReady()||!cinemaApp.isReady()||!ktvApp.isReady())throw new Error('当前浏览器无法保存数据，暂不能导入。');
     if(file.size>150*1024*1024)throw new Error('备份超过 150 MB，请拆分后再导入。');
@@ -63846,7 +64229,7 @@ $('backup-file').onchange=async()=>{
     const mergedCinema=mergeCinema(cinemaApp.getRecord(),incoming.cinema),mergedKtv=mergeCinema(ktvApp.getRecord(),incoming.ktv);
     await saveFullBackup(mergedMemories,mergedJourneys,mergedAlbums,mergedCinema,mergedKtv);memories=mergedMemories;travelApp.replaceRecords(mergedJourneys);albumApp.replaceRecords(mergedAlbums);await cinemaApp.replaceRecord(mergedCinema);await ktvApp.replaceRecord(mergedKtv);await refreshMemories();backupToast('备份已合并');
   }catch(error){backupToast(error instanceof SyntaxError?'这个文件不是有效的回忆备份。':error.message||'导入失败，请重试。');}
-  finally{importing=false;for(const id of ['app','travel-page','album-page','cinema-page','ktv-page'])$(id).inert=false;drawerBackgroundInert(!$('memory-drawer').hidden);$('backup-file').value='';$('import-memories').disabled=false;$('travel-import').disabled=false;$('album-import').disabled=false;$('cinema-import').disabled=false;$('ktv-import').disabled=false;routePage();}
+  finally{importing=false;for(const id of ['app','travel-page','album-page','cinema-page','ktv-page'])$(id).inert=false;drawerBackgroundInert(!$('memory-drawer').hidden);$('backup-file').value='';routePage();}
 };
 
 try{
@@ -63855,21 +64238,32 @@ try{
   $('home').onclick=()=>roomView.reset();$('reset-view').onclick=()=>roomView.reset();$('zoom-in').onclick=()=>roomView.zoom(1.15);$('zoom-out').onclick=()=>roomView.zoom(1/1.15);
   $('loading').style.opacity='0';setTimeout(()=>$('loading').hidden=true,550);
 }catch(error){console.error(error);$('loading').classList.add('error');$('loading').querySelector('p').textContent='暂时无法显示 3D 小屋。请使用支持 WebGL 的 Chrome、Edge 或 Safari 浏览器，并开启硬件加速。';}
-const memoryReady=memoryLoad().then(async records=>{memories=validBackup({format:'little-us-backup',version:1,memories:records});storageReady=true;await refreshMemories();}).catch(error=>{console.error(error);toast('浏览器存储不可用，回忆暂时无法保存。');});
+const memoryReady=detectHomeMode().then(async home=>{
+  try{
+    const records=await memoryLoad();
+    memories=validBackup({format:'little-us-backup',version:1,memories:records});
+    storageReady=true;
+    await refreshMemories();
+    if(home)toast('已连接小屋电脑，照片会保存在「小屋数据」文件夹');
+  }catch(error){
+    console.error(error);
+    toast(home?'小屋数据读取失败，请查看电脑端服务是否在运行。':'浏览器存储不可用，回忆暂时无法保存。');
+  }
+});
 function hideRoomForPage(force=false){
   birdTour?.cancel();
   $('object-panel').hidden=true;roomView?.selectObject(null);if(!$('memory-drawer').hidden)closeDrawer();
   if(!force&&pageTransition?.isActive())return;
   $('app').hidden=true;roomView?.setActive(false);
 }
-function restoreRoom(focusId){
+function restoreRoom(){
   if(pageTransition?.isActive()||openingApp?.isActive()||travelApp?.isOpen()||albumApp?.isOpen()||cinemaApp?.isOpen()||ktvApp?.isOpen())return;
-  $('app').hidden=false;roomView?.setActive(true);document.querySelector(`[data-object="${focusId}"]`)?.focus({preventScroll:true});
+  $('app').hidden=false;roomView?.setActive(true);$('home').focus({preventScroll:true});
 }
-travelApp=createTravelApp({compressPhoto,icon,onOpen:hideRoomForPage,onClose:()=>restoreRoom('map'),onExport:exportAll,onImport:requestImport});
-albumApp=createAlbumApp({compressPhoto,onCoverChange:pages=>{albumRoomPages=pages;return roomView?.setAlbumPages(pages);},onOpen:hideRoomForPage,onClose:()=>restoreRoom('photos'),onExport:exportAll,onImport:requestImport});
-cinemaApp=createCinemaApp({compressPhoto,onCoverChange:src=>roomView?.setProjectionPhoto(src),getRoomPhotos:async()=>{await memoryReady;return memories;},getAlbumPages:async()=>{await albumApp.ready;return albumRoomPages;},onOpen:hideRoomForPage,onClose:()=>restoreRoom('screen'),onExport:exportAll,onImport:requestImport});
-ktvApp=createKtvApp({onOpen:hideRoomForPage,onClose:()=>restoreRoom('guitar'),onExport:exportAll,onImport:requestImport});
+travelApp=createTravelApp({compressPhoto,icon,onOpen:hideRoomForPage,onClose:restoreRoom,onExport:exportAll,onImport:requestImport});
+albumApp=createAlbumApp({compressPhoto,onCoverChange:pages=>{albumRoomPages=pages;return roomView?.setAlbumPages(pages);},onOpen:hideRoomForPage,onClose:restoreRoom,onExport:exportAll,onImport:requestImport});
+cinemaApp=createCinemaApp({compressPhoto,onCoverChange:src=>roomView?.setProjectionPhoto(src),getRoomPhotos:async()=>{await memoryReady;return memories;},getAlbumPages:async()=>{await albumApp.ready;return albumRoomPages;},onOpen:hideRoomForPage,onClose:restoreRoom,onExport:exportAll,onImport:requestImport});
+ktvApp=createKtvApp({onOpen:hideRoomForPage,onClose:restoreRoom,onExport:exportAll,onImport:requestImport});
 pageTransition=createPageTransition({room:roomView,home:$('app'),hideHome:()=>hideRoomForPage(true)});
 async function enterFeature(api,hash,entrance,pageId,focusId){
   birdTour?.cancel();
@@ -63901,7 +64295,7 @@ async function routePage(){
     }else{
       if(!await albumApp.close(false)){history.replaceState(null,'','#album');return;}
       if(!await travelApp.close(false)){history.replaceState(null,'','#map');return;}
-      restoreRoom('photos');
+      restoreRoom();
     }
   }catch(error){console.error(error);pageTransition.cancel();history.replaceState(null,'',location.pathname+location.search);routePending=true;toast('页面加载失败，请重试。');}
   finally{routing=false;if(routePending){routePending=false;routePage();}}

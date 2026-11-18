@@ -12,10 +12,11 @@ Git 提交、构建产物和预览图规则见 [`GIT_WORKFLOW.md`](GIT_WORKFLOW.
 
 ## 打开网页
 
-- 推荐 Mac 双击 `启动小屋.command`，固定使用 `http://127.0.0.1:4173`。也可在项目目录运行 `python3 tools/serve.py --open`。需要 Python 3。
-- 也可以直接双击 `little-us.html`，在 Chrome、Edge 或 Safari 中打开。这是包含全部代码的离线单文件。
+- 推荐 Mac 双击 `启动小屋.command`（或运行 `python3 tools/home_server.py --open`）。电脑浏览器会打开本机地址；终端里还会打印「手机打开」地址，同一 Wi‑Fi 下手机浏览器输入即可共用。需要 Python 3。
+- 用这种方式启动时，照片、视频、音乐和文字会保存在项目里的 `小屋数据/` 文件夹，各设备看到的是同一份内容。
+- 也可以直接双击 `little-us.html`，在 Chrome、Edge 或 Safari 中打开。这是包含全部代码的离线单文件，数据只存在当前浏览器里，不会写入 `小屋数据/`，也不能给其他设备共用。
 - 只想看青岛小岛：双击 `qingdao-island.html`。这是从当前青岛 GLB、海面、构建动画和拖动/缩放逻辑单独导出的离线单文件，不含小屋、地图页和回忆存储。修改青岛模型后执行 `python3 tools/build_qingdao.py` 重新生成；主构建 `python3 tools/build.py` 也会自动同步它。
-- 本地服务仅监听本机，终端按 Control+C 即可关闭。首次使用无需安装 Node 或 npm。
+- 终端按 Control+C 即可关闭服务。首次使用无需安装 Node 或 npm。若手机连不上，确认与电脑同一 Wi‑Fi，并允许 Python 接收局域网连接。
 
 浏览器需要支持 WebGL 并启用硬件加速。电脑优先，手机已有自适应布局和双指缩放；真实手机触摸体验和性能仍待确认。
 
@@ -105,7 +106,9 @@ KTV 是代码建模的完整三维微缩包间，延续奶油色、鼠尾草绿�
 
 ## 本地保存与备份
 
-所有记录保存在当前浏览器的 IndexedDB，不发送给服务器。相册、地图、影院、KTV 和回忆盒子的导出按钮都生成统一 v6 JSON 备份，包含小屋回忆、足迹、相册、照片及裁切参数，以及影院照片和音乐、KTV 的单个视频。导入支持 v6、v5 KTV 旧版照片／音乐备份、v4 影院备份、v3 相册备份、v2 足迹备份与旧版 v1 小屋备份；记录按 ID 去重并保留更新时间较新的内容，影院与 KTV 分别保留更新时间较新的整份清单。旧版备份不会清除现有足迹、相册、影院或 KTV。导入先校验全部数据、照片、视频和音乐，再在单个事务中写入。单个导入文件上限 150 MB。
+双击 `启动小屋.command` 进入家庭局域网模式时，记录和媒体保存在项目目录的 `小屋数据/`（`照片/`、`视频/`、`音乐/`、`数据库/`），同一 Wi‑Fi 下各设备共用这份数据，不上传到公网。直接打开 `little-us.html` 时，仍使用当前浏览器的 IndexedDB，仅本机该浏览器可见。
+
+相册、地图、影院、KTV 和回忆盒子的导出按钮都生成统一 v6 JSON 备份，包含小屋回忆、足迹、相册、照片及裁切参数，以及影院照片和音乐、KTV 的单个视频。导入支持 v6、v5 KTV 旧版照片／音乐备份、v4 影院备份、v3 相册备份、v2 足迹备份与旧版 v1 小屋备份；记录按 ID 去重并保留更新时间较新的内容，影院与 KTV 分别保留更新时间较新的整份清单。旧版备份不会清除现有足迹、相册、影院或 KTV。导入先校验全部数据、照片、视频和音乐，再写入。家庭模式下导入会把备份里的媒体落到 `小屋数据/`。单个导入文件上限 150 MB。
 
 数据库继续使用原来的 `little-us-memories-v1` 名称和版本 3，保留 `memories`、`journeys`、`albums` 和 `settings` 表。影院与 KTV 清单存入现有 `settings` 表，不再升级数据库。如出现升级受阻提示，请关闭其他旧版小屋窗口后刷新。
 
@@ -159,7 +162,8 @@ src/app.js            页面路由、小屋交互、照片压缩和统一备份
 src/storage.js        IndexedDB 与小屋备份校验
 dist/assets/          Three.js、OrbitControls、RoundedBoxGeometry
 tools/build.py        Python 标准库构建脚本
-tools/serve.py        本机预览服务
+tools/home_server.py  家庭局域网服务（Wi‑Fi 共用、写入「小屋数据」）
+tools/serve.py        兼容入口，转发到 home_server.py
 tools/update-cities.py 更新城市表（维护时需要网络）
 tools/update-photo-wall.py 重新绘制并内嵌照片墙素材（维护时需要 Pillow / NumPy）
 tools/check-cinema.mjs 影院备份、照片比例、连续过片与正面取景检查
