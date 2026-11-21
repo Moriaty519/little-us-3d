@@ -1,7 +1,7 @@
 #!/bin/zsh
 cd "${0:A:h}"
 clear
-echo "正在启动小小的我们…"
+echo "正在启动雪海小屋…"
 echo ""
 python3 tools/home_server.py --open
 status=$?

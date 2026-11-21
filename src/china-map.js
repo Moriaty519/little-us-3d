@@ -45,6 +45,6 @@ export function drawChinaMap(ctx, width, height, {labels=true}={}) {
   if(labels){
     ctx.font='11px sans-serif';ctx.textAlign='center';ctx.fillStyle='#7f9ab0';ctx.fillText('南海诸岛',inset.x+inset.w/2,inset.y+inset.h-7);
     ctx.fillStyle='#4f6a80';ctx.font='30px sans-serif';ctx.textAlign='center';ctx.fillText('中国地图',width/2,height*.074);
-    ctx.font='12px sans-serif';ctx.fillStyle='#7f9ab0';ctx.fillText('CHINA · LITTLE US',width/2,height*.959);
+    ctx.font='12px sans-serif';ctx.fillStyle='#7f9ab0';ctx.fillText('CHINA · 雪海小屋',width/2,height*.959);
   }
 }

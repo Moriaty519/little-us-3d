@@ -89,14 +89,14 @@ def background():
         t=y/(H*S-1)
         d.line([(0,y),(W*S,y)],fill=tuple(round(a[i]*(1-t)+b[i]*t) for i in range(3)))
     button(im,(38,28,176,78),'回到小屋',sym='back')
-    text(im,(205,31),'little us.',30,INK,True)
-    text(im,(206,67),'小小的我们 · 足迹',12,MUTED)
+    text(im,(205,31),'雪海小屋',30,INK,True)
+    text(im,(206,67),'雪海小屋 · 足迹',12,MUTED)
     text(im,(800,55),'我们的足迹地图',19,INK,anchor='mm')
     button(im,(1270,28,1396,78),'导入 / 备份')
     button(im,(1414,28,1562,78),'记录足迹',True,'plus')
     line(im,[(40,105),(1560,105)],'#ddd7c3',1)
     text(im,(40,955),'设计稿 · 示例内容与图片区域，实际使用从空白记录开始',13,MUTED)
-    text(im,(1560,955),'little us.  /  TRAVEL MEMORIES',12,MUTED,True,anchor='ra')
+    text(im,(1560,955),'雪海小屋  /  TRAVEL MEMORIES',12,MUTED,True,anchor='ra')
     return im
 
 CITIES = [('北京',116.4053,39.9049,1),('上海',121.4737,31.2304,2),('成都',104.0665,30.5723,2),('大理',100.2676,25.6065,1)]

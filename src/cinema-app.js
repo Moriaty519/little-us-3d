@@ -5,7 +5,7 @@ import { confirmAction,modalOpen } from './ui.js';
 import { createCinemaSorter,moveCinemaPhotos } from './cinema-sort.js';
 import { detectHomeMode, homeUploadFile, isHomeMode } from './home-store.js';
 
-export function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,onCoverChange=()=>{},getRoomPhotos=()=>[],getAlbumPages=()=>[],namespace='cinema',pageHash='#cinema',sceneFactory=createCinemaScene,loadRecord=cinemaLoad,saveRecord=cinemaSave,validateRecord=validCinema,playlistId='cinema-playlist',allowSamples=true,photoInterval=2000,sceneLabel='客厅投影',musicOnly=false,instrumentSound=false,swipePhotos=true}){
+export function createCinemaApp({compressPhoto,onOpen,onClose,onExport,onImport,onCoverChange=()=>{},getRoomPhotos=()=>[],getAlbumPages=()=>[],namespace='cinema',pageHash='#cinema',sceneFactory=createCinemaScene,loadRecord=cinemaLoad,saveRecord=cinemaSave,validateRecord=validCinema,playlistId='cinema-playlist',allowSamples=true,photoInterval=2000,sceneLabel='朋友幕布',musicOnly=false,instrumentSound=false,swipePhotos=true}){
   const el=id=>document.getElementById(id.replace(/^cinema-/,namespace+'-')),page=el('cinema-page'),editor=el('cinema-editor');
   const examples=albumSampleRecords(),samplePhotos=[examples[0].photos[0],examples[2].photos[0],examples[3].photos[0],examples[0].photos[2],examples[0].photos[1],examples[2].photos[1]].map((p,i)=>({id:'cinema-sample-'+i,src:p.src,sample:i}));
   let record=null,draft=null,loaded=false,opened=false,view=null,index=0,playing=false,moving=false,muted=false,audio=null,audioSrc=null,timer=0,nextAt=0,toastTimer=0,generation=0,dirty=false,processing=false,saving=false,displayVersion=0,openVersion=0,renderedPlay=null,renderedMute=null;

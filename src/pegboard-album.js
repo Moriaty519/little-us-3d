@@ -60,8 +60,8 @@ export function createPegboardAlbum({texture,onChange}){
       },300,300);mat.map?.dispose();mat.map=map;mat.needsUpdate=true;
     });onChange();
   }
-  async function setPages(pages){
-    const generation=++coverGeneration,rendered=await renderAlbumPage({cover:true},{cover:true,...albumCoverOptions(pages)});if(generation!==coverGeneration)return;
+  async function setPages(pages,coverPhoto=null){
+    const generation=++coverGeneration,rendered=await renderAlbumPage({cover:true},{cover:true,...albumCoverOptions(pages,coverPhoto)});if(generation!==coverGeneration)return;
     const map=new THREE.CanvasTexture(rendered.canvas);map.colorSpace=THREE.SRGBColorSpace;cover.map?.dispose();cover.map=map;cover.needsUpdate=true;onChange();
   }
   setPhotos([]).catch(console.error);setPages([]).catch(console.error);

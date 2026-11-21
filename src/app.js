@@ -191,7 +191,7 @@ function restoreRoom(){
   $('app').hidden=false;roomView?.setActive(true);$('home').focus({preventScroll:true});
 }
 travelApp=createTravelApp({compressPhoto,icon,onOpen:hideRoomForPage,onClose:restoreRoom,onExport:exportAll,onImport:requestImport});
-albumApp=createAlbumApp({compressPhoto,onCoverChange:pages=>{albumRoomPages=pages;return roomView?.setAlbumPages(pages);},onOpen:hideRoomForPage,onClose:restoreRoom,onExport:exportAll,onImport:requestImport});
+albumApp=createAlbumApp({compressPhoto,onCoverChange:(pages,coverPhoto)=>{albumRoomPages=pages;return roomView?.setAlbumPages(pages,coverPhoto);},onOpen:hideRoomForPage,onClose:restoreRoom,onExport:exportAll,onImport:requestImport});
 cinemaApp=createCinemaApp({compressPhoto,onCoverChange:src=>roomView?.setProjectionPhoto(src),getRoomPhotos:async()=>{await memoryReady;return memories;},getAlbumPages:async()=>{await albumApp.ready;return albumRoomPages;},onOpen:hideRoomForPage,onClose:restoreRoom,onExport:exportAll,onImport:requestImport});
 ktvApp=createKtvApp({onOpen:hideRoomForPage,onClose:restoreRoom,onExport:exportAll,onImport:requestImport});
 pageTransition=createPageTransition({room:roomView,home:$('app'),hideHome:()=>hideRoomForPage(true)});

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { renderAlbumPage,albumCoverOptions } from './album-pages.js';
 import { ALBUM_FOLD_WIDTH,ALBUM_FOLD_HEIGHT,albumFoldColumns,albumTurnColumns,albumTurnUV,albumBookPose,albumFoldLayout,albumFoldWindow,albumJumpPath,albumJumpTiming,albumJumpProgress } from './album-fold.js';
 
-export function createAlbumScene(container,{onPhoto,onState,onLayout}){
+export function createAlbumScene(container,{onPhoto,onSwipe,onState,onLayout,getCoverPhoto=null}){
   const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setClearColor(0,0);renderer.outputColorSpace=THREE.SRGBColorSpace;
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   const canvas=renderer.domElement;canvas.setAttribute('aria-label','相册。底部按钮逐页翻阅，点击月份快速翻页，点击照片放大。');container.prepend(canvas);
@@ -123,7 +123,7 @@ export function createAlbumScene(container,{onPhoto,onState,onLayout}){
     const animateAdjacent=canAnimate&&animate&&Math.abs(at-old)===1&&!jumpPath,windowIndices=[...new Set([...albumFoldWindow(at,list.length,radius,animateAdjacent?old:at),...(jumpPath||[])])];
     if(!animateAdjacent&&!jumpPath){current=at;for(const [i,item] of entries)if(!windowIndices.includes(i)){dispose(item);entries.delete(i);}}
     try{
-      const coverOptions=albumCoverOptions(list);
+      const coverOptions=albumCoverOptions(list,typeof getCoverPhoto==='function'?getCoverPhoto():null);
       const missing=windowIndices.filter(i=>!entries.has(i)),drawn=await Promise.all(missing.map(i=>renderAlbumPage(list[i],{cover:!!list[i].cover,pageNumber:i,...coverOptions,placeholder:preview})));
       if(gen!==version||disposed)return false;missing.forEach((i,j)=>entries.set(i,sheet(drawn[j],null,list[i].cover?'right':'full')));
       if(jumpPath||animateAdjacent){current=old;layout();const started=jumpPath?startJump(jumpPath):startTransition(at);if(!started||!await settle(true)||gen!==version||disposed)return false;}else{current=at;layout();}
@@ -131,6 +131,7 @@ export function createAlbumScene(container,{onPhoto,onState,onLayout}){
     }catch(error){console.error(error);return false;}finally{if(gen===version){loading=false;onState?.(false);}}
   }
   const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();
+  let swipe=null;
   function picked(event,all=false){const r=canvas.getBoundingClientRect();pointer.set((event.clientX-r.left)/r.width*2-1,-(event.clientY-r.top)/r.height*2+1);raycaster.setFromCamera(pointer,camera);scene.updateMatrixWorld(true);const meshes=all?[...entries.values()].filter(item=>item.group.visible).map(item=>item.mesh):[entries.get(current)?.mesh].filter(Boolean);return raycaster.intersectObjects(meshes)[0]||null;}
   function photoAt(event){
     if(editing||loading||transition||pages[current]?.cover)return null;
@@ -138,18 +139,31 @@ export function createAlbumScene(container,{onPhoto,onState,onLayout}){
     const x=hit.uv.x*860,y=(1-hit.uv.y)*622;
     return item.rendered.hits.find(photo=>x>=photo.rect[0]&&x<=photo.rect[0]+photo.rect[2]&&y>=photo.rect[1]&&y<=photo.rect[1]+photo.rect[3])||null;
   }
-  canvas.addEventListener('pointerdown',event=>{if(down){down=null;return;}if(event.button!==0||event.isPrimary===false)return;const photo=photoAt(event);if(!photo)return;down={id:event.pointerId,x:event.clientX,y:event.clientY,photo:photo.index,moved:false};canvas.setPointerCapture(event.pointerId);});
+  canvas.addEventListener('pointerdown',event=>{
+    if(event.button!==0||event.isPrimary===false)return;
+    swipe={id:event.pointerId,x:event.clientX,y:event.clientY,t:event.timeStamp,moved:false};
+    const photo=photoAt(event);
+    if(photo){down={id:event.pointerId,x:event.clientX,y:event.clientY,photo:photo.index,moved:false};canvas.setPointerCapture(event.pointerId);}
+    else if(!editing&&!loading&&!transition)canvas.setPointerCapture(event.pointerId);
+  });
   canvas.addEventListener('pointermove',event=>{
     if(down&&down.id===event.pointerId&&Math.hypot(event.clientX-down.x,event.clientY-down.y)>10)down.moved=true;
+    if(swipe&&swipe.id===event.pointerId&&Math.hypot(event.clientX-swipe.x,event.clientY-swipe.y)>12)swipe.moved=true;
     canvas.style.cursor=photoAt(event)?'zoom-in':'default';
   });
   canvas.addEventListener('pointerup',event=>{
-    if(!down||down.id!==event.pointerId)return;const began=down;down=null;
-    if(began.moved||Math.hypot(event.clientX-began.x,event.clientY-began.y)>10)return;
-    const photo=photoAt(event);if(photo&&photo.index===began.photo)onPhoto?.(photo.index);
+    const began=down&&down.id===event.pointerId?down:null;down=null;
+    const gesture=swipe&&swipe.id===event.pointerId?swipe:null;swipe=null;
+    if(began&&!began.moved&&Math.hypot(event.clientX-began.x,event.clientY-began.y)<=10){
+      const photo=photoAt(event);if(photo&&photo.index===began.photo){onPhoto?.(photo.index);return;}
+    }
+    if(!gesture||editing||loading||transition||event.timeStamp-gesture.t>900)return;
+    const dx=event.clientX-gesture.x,dy=event.clientY-gesture.y;
+    if(Math.abs(dx)<56||Math.abs(dx)<=Math.abs(dy)*1.25)return;
+    onSwipe?.(dx<0?1:-1);
   });
-  canvas.addEventListener('pointercancel',()=>{down=null;});
-  canvas.addEventListener('lostpointercapture',()=>{down=null;});
+  canvas.addEventListener('pointercancel',()=>{down=null;swipe=null;});
+  canvas.addEventListener('lostpointercapture',()=>{down=null;swipe=null;});
   canvas.addEventListener('pointerleave',()=>{canvas.style.cursor='default';});
   function render(time){
     if(disposed)return;requestAnimationFrame(render);if(!active||document.hidden||time-last<16)return;last=time;
@@ -157,11 +171,14 @@ export function createAlbumScene(container,{onPhoto,onState,onLayout}){
     if(dirty){renderer.render(scene,camera);dirty=false;}
   }
   requestAnimationFrame(render);
-  function coverBounds(){
-    const item=entries.get(current);if(!item||!isCover())return null;scene.updateMatrixWorld(true);camera.updateMatrixWorld(true);const bounds=container.getBoundingClientRect(),positions=item.geometry.attributes.position;
+  function pageBounds(){
+    const item=entries.get(current);if(!item||!item.group.visible||transition)return null;
+    scene.updateMatrixWorld(true);camera.updateMatrixWorld(true);const bounds=container.getBoundingClientRect(),positions=item.geometry.attributes.position;
     let left=Infinity,right=-Infinity,top=Infinity,bottom=-Infinity;
-    for(let i=0;i<positions.count;i++){const point=new THREE.Vector3().fromBufferAttribute(positions,i).applyMatrix4(item.group.matrixWorld).project(camera),x=bounds.left+(point.x+1)*bounds.width/2,y=bounds.top+(1-point.y)*bounds.height/2;left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}
+    for(let i=0;i<positions.count;i++){const point=new THREE.Vector3().fromBufferAttribute(positions,i).applyMatrix4(item.group.matrixWorld).project(camera);if(!Number.isFinite(point.x)||!Number.isFinite(point.y)||point.z>1)continue;const x=bounds.left+(point.x+1)*bounds.width/2,y=bounds.top+(1-point.y)*bounds.height/2;left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}
+    if(!Number.isFinite(left)||right-left<24||bottom-top<24)return null;
     return {left,top,width:right-left,height:bottom-top};
   }
-  return {show,fit,coverBounds,pageCorner:()=>{const item=entries.get(current);if(!item)return null;const point=new THREE.Vector3(width/2,height/2,0);item.group.localToWorld(point);point.project(camera);const rect=container.getBoundingClientRect();return {x:rect.left+(point.x+1)*rect.width/2,y:rect.top+(1-point.y)*rect.height/2};},isBusy:()=>loading||!!transition,setActive:value=>{active=value;if(!value){version++;loading=false;down=null;if(transition)finishTransition(false);}else{fit();dirty=true;}},dispose:()=>{disposed=true;version++;if(transition)finishTransition(false);observer.disconnect();clear();stackGeometry.dispose();closedStack.children.forEach(edge=>edge.material.dispose());contact.geometry.dispose();contact.material.dispose();shadowTexture.dispose();ground.geometry.dispose();ground.material.dispose();renderer.dispose();}};
+  function coverBounds(){return isCover()?pageBounds():null;}
+  return {show,fit,coverBounds,pageBounds,pageCorner:()=>{const bounds=pageBounds();if(!bounds)return null;return {x:bounds.left+bounds.width,y:bounds.top};},isBusy:()=>loading||!!transition,setActive:value=>{active=value;if(!value){version++;loading=false;down=null;swipe=null;if(transition)finishTransition(false);}else{fit();dirty=true;}},dispose:()=>{disposed=true;version++;if(transition)finishTransition(false);observer.disconnect();clear();stackGeometry.dispose();closedStack.children.forEach(edge=>edge.material.dispose());contact.geometry.dispose();contact.material.dispose();shadowTexture.dispose();ground.geometry.dispose();ground.material.dispose();renderer.dispose();}};
 }

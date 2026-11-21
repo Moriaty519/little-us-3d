@@ -18,6 +18,26 @@ export async function albumSave(record){await detectHomeMode();if(isHomeMode()){
 export async function albumRemove(id){await detectHomeMode();if(isHomeMode()){await homeRemove('albums',id);return;}await memoryTransaction('readwrite',s=>s.delete(id),'albums');}
 export async function albumSamplesHidden(){await detectHomeMode();if(isHomeMode())return !!(await homeGet('settings','album-hide-samples'))?.value;return !!(await memoryTransaction('readonly',s=>s.get('album-hide-samples'),'settings'))?.value;}
 export async function hideAlbumSamples(value){await detectHomeMode();if(isHomeMode()){await homePut('settings',{id:'album-hide-samples',value:!!value});return;}await memoryTransaction('readwrite',s=>s.put({id:'album-hide-samples',value:!!value}),'settings');}
+export async function albumCoverLoad(){
+  await detectHomeMode();
+  const record=isHomeMode()?await homeGet('settings','album-cover'):await memoryTransaction('readonly',s=>s.get('album-cover'),'settings');
+  if(!record?.photo||!isMediaRef(record.photo.src,'image'))return null;
+  const crop=record.photo.crop;
+  if(crop&&(!Number.isFinite(crop.x)||crop.x<0||crop.x>1||!Number.isFinite(crop.y)||crop.y<0||crop.y>1||!Number.isFinite(crop.zoom)||crop.zoom<1||crop.zoom>3))return {src:record.photo.src,crop:{x:.5,y:.5,zoom:1}};
+  return {src:record.photo.src,crop:crop?{x:crop.x,y:crop.y,zoom:crop.zoom}:{x:.5,y:.5,zoom:1}};
+}
+export async function albumCoverSave(photo){
+  await detectHomeMode();
+  if(!photo){
+    if(isHomeMode()){await homeRemove('settings','album-cover');return;}
+    await memoryTransaction('readwrite',s=>s.delete('album-cover'),'settings');
+    return;
+  }
+  if(!isMediaRef(photo.src,'image'))throw new Error('封面照片无法保存。');
+  const record={id:'album-cover',photo:{src:photo.src,crop:{x:photo.crop?.x??.5,y:photo.crop?.y??.5,zoom:photo.crop?.zoom??1}}};
+  if(isHomeMode()){await homePut('settings',record);return;}
+  await memoryTransaction('readwrite',s=>s.put(record),'settings');
+}
 export function validAlbums(records){
   if(!Array.isArray(records)||records.length>1000)throw new Error('相册最多保存 1000 个故事，尚未导入任何内容。');
   const ids=new Set();

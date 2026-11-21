@@ -78,7 +78,7 @@ def print_banner(port):
     local = f'http://127.0.0.1:{port}'
     print()
     print('========================================')
-    print('  小小的我们 · 已在本机启动')
+    print('  雪海小屋 · 已在本机启动')
     print('========================================')
     print(f'  本机打开：{local}')
     for ip in lan_ips():
@@ -367,7 +367,7 @@ class HomeHandler(SimpleHTTPRequestHandler):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='小小的我们 · 家庭局域网服务')
+    parser = argparse.ArgumentParser(description='雪海小屋 · 家庭局域网服务')
     parser.add_argument('--port', type=int, default=4173)
     parser.add_argument('--open', action='store_true')
     parser.add_argument('--host', default='0.0.0.0')

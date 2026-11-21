@@ -67,7 +67,7 @@ def arrow(im,x,y,length=52):
 
 im=Image.new('RGBA',(1600*S,1290*S),d.BG)
 d.btn(im,(36,28,184,82),'回到小屋',sym='back')
-d.tx(im,(209,30),'little us.',31,d.INK,'latin');d.tx(im,(210,66),'小小的我们 · 相册',12,d.MUTED)
+d.tx(im,(209,30),'雪海小屋',31,d.INK,'latin');d.tx(im,(210,66),'雪海小屋 · 相册',12,d.MUTED)
 d.tx(im,(824,53),'我们的时光手帐',17,d.MUTED,anchor='mm')
 d.btn(im,(1141,31,1282,80),'导出备份');d.btn(im,(1296,31,1394,80),'模板');d.btn(im,(1410,31,1565,80),'写一页',True,'plus')
 d.ln(im,[(36,100),(1565,100)],'#dfd9c7')

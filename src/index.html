@@ -2,17 +2,17 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
   <meta name="theme-color" content="#f3ecdf">
   <meta name="description" content="一间装着音乐、电影和我们的小小 3D 回忆屋。">
-  <title>little us. · 小小的我们</title>
+  <title>雪海小屋</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%235f86ad'/%3E%3Cpath d='M10 20L20 10l10 10v12H10z' fill='none' stroke='%23fff9ed' stroke-width='2.5'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="./style.css">
   <script type="importmap">{"imports":{"three":"./assets/three.module.js"}}</script>
 </head>
 <body>
   <section id="opening-page" class="opening-page" role="dialog" aria-modal="true" aria-label="给我们的一封信">
-    <header class="opening-header"><span class="opening-brand">little us.</span></header>
+    <header class="opening-header"><span class="opening-brand">雪海小屋</span></header>
     <div id="opening-room-slot" class="opening-room-slot" aria-hidden="true"><div id="opening-room-fallback" hidden><svg viewBox="0 0 320 230"><rect x="15" y="20" width="290" height="185" rx="5" fill="#c3d7e8"/><path d="m15 20 145 105L305 20M15 205l105-85m185 85L200 120" stroke="#a6bbcf" stroke-width="1" fill="none"/></svg></div></div>
     <article id="opening-letter" class="opening-letter" aria-hidden="true"></article>
     <button id="opening-seal" class="opening-seal" aria-label="拆开这封信"><span class="sr-only">anniversary，拆开这封信</span></button>
@@ -67,7 +67,7 @@
   <dialog id="travel-lightbox" aria-labelledby="travel-lightbox-title"><button id="travel-lightbox-close" class="close-button" aria-label="关闭照片" data-icon="close"></button><h2 id="travel-lightbox-title"></h2><img id="travel-lightbox-image" alt=""><div class="travel-lightbox-controls"><button id="travel-photo-prev" class="travel-soft-button" aria-label="上一张照片">← 上一张</button><span id="travel-photo-index"></span><button id="travel-photo-next" class="travel-soft-button" aria-label="下一张照片">下一张 →</button></div></dialog>
   <section id="album-page" hidden aria-label="我们的时光手帐">
     <header class="album-topbar"><button id="album-back" class="travel-soft-button"><span data-icon="back"></span>小屋</button><h1>相册</h1><div class="album-top-actions"><button id="album-add" class="travel-primary"><span data-icon="plus"></span>写一页</button></div></header>
-    <aside id="album-timeline" class="album-timeline" aria-label="相册年月目录"><label for="album-year" class="album-year-label"><select id="album-year" aria-label="相册年份"></select></label><nav id="album-months" aria-label="按月份跳转"></nav></aside>
+    <aside id="album-timeline" class="album-timeline" aria-label="相册年月目录"><div class="album-timeline-main"><label for="album-year" class="album-year-label"><select id="album-year" aria-label="相册年份"></select></label><nav id="album-months" aria-label="按月份跳转"></nav></div><nav id="album-days" class="album-days" aria-label="按日期跳转" hidden></nav></aside>
     <div id="album-stage" class="album-stage"><p id="album-loading" role="status">正在展开…</p><button id="album-page-edit" class="album-page-edit" aria-label="编辑这一页" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.6 14.4 4.5 10.7 12.8 2.4a1.5 1.5 0 0 1 2.1 0l1.6 1.6a1.5 1.5 0 0 1 0 2.1l-8.3 8.3-3.8.9z"/><path d="m11.2 4 3.9 3.9"/></svg></button></div>
     <div id="album-readable" class="album-readable" aria-live="polite"></div>
     <footer id="album-footer" class="album-footer"><div class="album-flip-controls" aria-label="相册翻页"><button id="album-prev" aria-label="相册上一页">‹</button><span id="album-page-number" aria-live="polite"></span><button id="album-next" aria-label="相册下一页">›</button></div></footer>
@@ -77,9 +77,9 @@
   <dialog id="album-gallery" aria-labelledby="album-gallery-title"><button id="album-gallery-close" class="close-button" aria-label="关闭相册总览" data-icon="close"></button><h2 id="album-gallery-title">页面总览</h2><div id="album-gallery-grid"></div><div class="album-gallery-nav"><button id="album-gallery-prev" class="travel-soft-button">上一组</button><span id="album-gallery-count"></span><button id="album-gallery-next" class="travel-soft-button">下一组</button></div></dialog>
   <dialog id="album-crop" aria-labelledby="album-crop-title"><button id="album-crop-close" class="close-button" aria-label="关闭照片裁切" data-icon="close"></button><h2 id="album-crop-title">调整照片裁切</h2><canvas id="album-crop-canvas" width="840" height="500" tabindex="0" aria-label="照片裁切区域，可拖动或用方向键调整位置"></canvas><label class="album-crop-zoom-label">缩放<input id="album-crop-zoom" type="range" min="1" max="3" step="0.01" value="1" aria-label="照片缩放"></label><div class="album-crop-actions"><button id="album-crop-reset" class="travel-soft-button">重置裁切</button><button id="album-crop-cancel" class="travel-soft-button">取消裁切</button><button id="album-crop-apply" class="travel-primary">应用裁切</button></div></dialog>
   <dialog id="album-lightbox" aria-labelledby="album-lightbox-title"><button id="album-lightbox-close" class="close-button" aria-label="关闭相册照片" data-icon="close"></button><h2 id="album-lightbox-title"></h2><img id="album-lightbox-image" alt=""><div class="travel-lightbox-controls"><button id="album-photo-prev" class="travel-soft-button" aria-label="相册上一张照片">← 上一张</button><span id="album-photo-number"></span><button id="album-photo-next" class="travel-soft-button" aria-label="相册下一张照片">下一张 →</button></div></dialog>
-  <section id="cinema-page" hidden aria-label="客厅投影">
+  <section id="cinema-page" hidden aria-label="朋友幕布">
     <div id="cinema-scene" role="img" aria-label="坐在小屋沙发上观看投影"></div><div class="cinema-shade"></div>
-    <header class="cinema-topbar"><button id="cinema-back" class="cinema-pill"><span data-icon="back"></span>小屋</button><div><button id="cinema-edit" class="cinema-pill cinema-green"><span data-icon="photo"></span>放映清单</button></div></header>
+    <header class="cinema-topbar"><button id="cinema-back" class="cinema-pill"><span data-icon="back"></span>小屋</button><h1>朋友幕布</h1><div><button id="cinema-edit" class="cinema-pill cinema-green"><span data-icon="photo"></span>放映清单</button></div></header>
     <p id="cinema-loading" role="status">加载中…</p><div id="cinema-empty" hidden><button class="cinema-pill" id="cinema-empty-add"><span data-icon="plus"></span>添加照片</button></div>
     <nav id="cinema-dots" aria-label="照片跳转"></nav>
     <footer class="cinema-controls" aria-label="放映控制"><button id="cinema-prev" aria-label="上一张影院照片">‹</button><button id="cinema-play" class="cinema-play" aria-label="开始放映" aria-pressed="false"></button><button id="cinema-next" aria-label="下一张影院照片">›</button><span id="cinema-count"></span><i></i><button id="cinema-mute" aria-label="静音影院音乐" aria-pressed="false"></button></footer>

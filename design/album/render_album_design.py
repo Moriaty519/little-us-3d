@@ -210,7 +210,7 @@ def page_film():
     im=paper(color='#f8f5e7');tx(im,(44,40),'一段散步，六个瞬间。',34,INK,'serif');tx(im,(45,101),'2025.06.01  /  SIX LITTLE MOMENTS',13,MUTED,'latin')
     for i in range(6):
         x=44+(i%3)*257;y=158+(i//3)*192
-        rect(im,(x,y,x+237,y+171),'#58614d',rad=2);imagebox(im,(x+10,y+12,x+227,y+138),['street','home','flowers','hills','lake','snow'][i]);tx(im,(x+14,y+151),f'0{i+1}    little us.',10,'#e8e6d7','latin')
+        rect(im,(x,y,x+237,y+171),'#58614d',rad=2);imagebox(im,(x+10,y+12,x+227,y+138),['street','home','flowers','hills','lake','snow'][i]);tx(im,(x+14,y+151),f'0{i+1}    雪海小屋',10,'#e8e6d7','latin')
     tx(im,(44,563),'路很短，回忆很长。',21,MUTED,'serif');return im
 
 def page_letter():
@@ -231,7 +231,7 @@ def page_cover():
     texture=Image.new('RGBA',im.size)
     for x in range(30,830,7):ln(texture,[(x,27),(x,592)],(239,235,213,8),.5)
     im.alpha_composite(texture)
-    tx(im,(430,80),'LITTLE US. / OUR PHOTO JOURNAL',14,'#e5e7d1','latin',anchor='mm')
+    tx(im,(430,80),'雪海小屋. / OUR PHOTO JOURNAL',14,'#e5e7d1','latin',anchor='mm')
     tx(im,(430,142),'把日子，慢慢写成一本书。',43,'#fff8e7','serif',anchor='mm')
     polaroid(im,(236,208,344,267),'hills','把每一次同行，留在这里。',-3);tape(im,362,192,101,'#dbc895',-4)
     guitar(im,168,390,.85);bird(im,685,414,1.05);heart(im,695,245,28,'#d6b798')
@@ -259,7 +259,7 @@ def shell(title='每一页，都有我们。',subtitle='按日期排列，翻回
     a=(242,236,220);b=(234,227,207)
     for y in range(H*S):
         t=y/(H*S);d.line((0,y,W*S,y),fill=tuple(round(a[i]*(1-t)+b[i]*t) for i in range(3)))
-    btn(im,(36,27,173,76),'回到小屋',sym='back');tx(im,(202,28),'little us.',30,INK,'latin');tx(im,(204,65),'小小的我们 · 相册',12,MUTED)
+    btn(im,(36,27,173,76),'回到小屋',sym='back');tx(im,(202,28),'雪海小屋',30,INK,'latin');tx(im,(204,65),'雪海小屋 · 相册',12,MUTED)
     tx(im,(800,52),'我们的时光手帐',18,INK,anchor='mm');btn(im,(1241,27,1389,76),'导入 / 备份');btn(im,(1407,27,1564,76),'写一页',True,'plus')
     ln(im,[(36,99),(1564,99)],'#ded8c4')
     tx(im,(315,126),title,29,INK,'serif');tx(im,(317,170),subtitle,15,MUTED)
@@ -273,7 +273,7 @@ def shell(title='每一页，都有我们。',subtitle='按日期排列，翻回
             if isactive:rect(im,(42,y,257,y+68),'#e0e7d2',rad=14)
             ell(im,(60,y+27,70,y+37),GREEN if isactive else '#c5ccb0');tx(im,(89,y+12),month,18,GREEN if isactive else INK);tx(im,(90,y+43),small,11,MUTED)
         chip(im,(45,734,168,765),'模板示例 · 可移除');tx(im,(45,790),'照片和文字仅保存在本机。',11,MUTED);tx(im,(45,815),'更换设备前，请导出备份。',11,MUTED)
-    tx(im,(39,959),'相册设计稿 · 所有图片均为占位示意，示例不是用户记录',12,MUTED);tx(im,(1560,959),'little us. / A JOURNAL OF US',12,MUTED,'latin',anchor='rm')
+    tx(im,(39,959),'相册设计稿 · 所有图片均为占位示意，示例不是用户记录',12,MUTED);tx(im,(1560,959),'雪海小屋 / A JOURNAL OF US',12,MUTED,'latin',anchor='rm')
     return im
 
 def stack(im,kind='daily',x=333,y=212,scale=1):

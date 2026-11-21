@@ -34,10 +34,10 @@ export function albumCropRect(imageWidth,imageHeight,width,height,crop={x:.5,y:.
   const scale=Math.max(width/imageWidth,height/imageHeight)*crop.zoom,sourceWidth=width/scale,sourceHeight=height/scale;
   return {x:(imageWidth-sourceWidth)*crop.x,y:(imageHeight-sourceHeight)*crop.y,width:sourceWidth,height:sourceHeight};
 }
-export function albumCoverOptions(pages){
+export function albumCoverOptions(pages,explicitCover=null){
   const years=[...new Set(pages.filter(page=>page.record&&!page.record.sample).map(page=>+page.record.date.slice(0,4)))];
   return {years:years.length?[Math.min(...years),Math.max(...years)].filter((year,i,list)=>!i||year!==list[0]).join(' — '):'',
-    coverPhoto:(pages.find(page=>!page.record?.sample&&page.photos?.length)||pages.find(page=>page.photos?.length))?.photos?.[0]};
+    coverPhoto:explicitCover||(pages.find(page=>!page.record?.sample&&page.photos?.length)||pages.find(page=>page.photos?.length))?.photos?.[0]||null};
 }
 function albumImage(src){
   if(albumImageCache.has(src))return albumImageCache.get(src);
@@ -84,12 +84,12 @@ export function albumSampleRecords(){
 // Frames stay on one side of the crease; editor crop uses these same dimensions.
 export function albumPhotoSlots(template){
   const slots={
-    daily:[[45,218,338,262,true],[486,107,277,224,true],[555,365,235,223,true]],
+    daily:[[30,138,380,345,true],[455,48,355,280,true],[470,338,340,268,true]],
     travel:[[24,73,381,523,true],[467,420,346,131,true]],
-    anniversary:[[67,223,300,278,true],[493,214,290,287,true]],
+    anniversary:[[40,208,350,310,true],[470,208,350,310,true]],
     film:[[40,140,390,210,true],[40,362,190,206,true],[235,362,190,206,true],[440,140,185,200,true],[630,140,185,200,true],[440,352,380,216,true]],
     letter:[[470,73,350,523,true]],large:[[456,73,380,523,true]],
-    quad:[[40,140,380,200,true],[440,140,380,200,true],[40,350,380,200,true],[440,350,380,200,true]],
+    quad:[[26,128,380,222,true],[454,128,380,222,true],[26,368,380,222,true],[454,368,380,222,true]],
     five:[[40,140,390,220,true],[440,140,380,220,true],[40,372,390,196,true],[440,372,185,196,true],[635,372,185,196,true]],
     six:[[40,140,390,210,true],[40,362,190,206,true],[235,362,190,206,true],[440,140,185,200,true],[630,140,185,200,true],[440,352,380,216,true]]
   };
@@ -136,17 +136,25 @@ export async function renderAlbumPage(page,{cover=false,pageNumber=1,years='',co
     text(r.date.replaceAll('-','.'),46,34,13,'#9d9c8d',false);text(pageNumber.toString().padStart(2,'0'),815,591,12,'#a6a393',false,'right');
   }
   if(template==='cover'){
-    box(430,0,10,622,'#eee8d9');box(441,0,2,622,'#a9c6dd');box(447,0,1,622,'#8fb0cb');text('little us.',491,91,43,'#fff9e9');text('相册',494,149,19,'#f3ead8');text(years,494,570,14,'#f3ead8',false);
+    box(430,0,10,622,'#eee8d9');box(441,0,2,622,'#a9c6dd');box(447,0,1,622,'#8fb0cb');text('雪海小屋',491,96,34,'#fff9e9');text('相册',494,148,19,'#f3ead8');text(years,494,570,14,'#f3ead8',false);
     const cp=(coverPhoto?await albumImage(coverPhoto.src):null)||defaults[3];
-    box(491,216,304,322,'#fffdf2',3);ctx.fillStyle='#f5f1e6';ctx.fillRect(503,228,280,270);const coverScale=Math.min(280/cp.naturalWidth,270/cp.naturalHeight);const coverW=cp.naturalWidth*coverScale,coverH=cp.naturalHeight*coverScale;ctx.drawImage(cp,503+(280-coverW)/2,228+(270-coverH)/2,coverW,coverH);
+    const frameW=300,frameH=338,frameX=493,frameY=198,pad=10,bottom=36,photoW=frameW-pad*2,photoH=frameH-pad-bottom;
+    ctx.save();ctx.translate(frameX+frameW/2,frameY+frameH/2);
+    ctx.shadowColor='rgba(71,57,33,.18)';ctx.shadowBlur=14;ctx.shadowOffsetY=6;box(-frameW/2,-frameH/2,frameW,frameH,'#fffef7',3,'#e6dfd0');
+    ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+    const px=-frameW/2+pad,py=-frameH/2+pad;ctx.beginPath();ctx.rect(px,py,photoW,photoH);ctx.clip();
+    const coverScale=Math.max(photoW/Math.max(1,cp.naturalWidth),photoH/Math.max(1,cp.naturalHeight));
+    const coverW=cp.naturalWidth*coverScale,coverH=cp.naturalHeight*coverScale;
+    box(px,py,photoW,photoH,'#f5f1e6');ctx.drawImage(cp,px+(photoW-coverW)/2,py+(photoH-coverH)/2,coverW,coverH);
+    ctx.restore();
   }else if(template==='daily'){
-    title(44,88,340,30,'#535e4c',108);
-    slot(0,{kind:'home'});slot(1,{kind:'flowers'});slot(2,{kind:'street'});tape(154,207,84,'#d9ceb4',0);tape(584,96,75,'#a9c6dd',0);lines(page.lines,47,512,19,24);
+    title(44,54,340,28,'#535e4c',72);
+    slot(0,{kind:'home'});slot(1,{kind:'flowers'});slot(2,{kind:'street'});lines(page.lines,47,500,19,24);
   }else if(template==='travel'){
     slot(0,{kind:'hills'});title(466,90,349,30,'#535e4c',105);lines(page.lines,467,205,20,25);slot(1,{kind:'lake'});
   }else if(template==='anniversary'){
     title(48,90,340,32,'#655c50',116);
-    slot(0,{kind:'lake'});slot(1,{kind:'home'});tape(168,212,84,'#dfcbb4',0);tape(599,203,79,'#b7d0e2',0);
+    slot(0,{kind:'lake'});slot(1,{kind:'home'});
     lines(page.lines.slice(0,2),47,539,23,28,'#8d7968');lines(page.lines.slice(2),477,539,23,28,'#8d7968');
   }else if(template==='six'||template==='film'){
     title(44,88,420,24,'#535e4c',38);
